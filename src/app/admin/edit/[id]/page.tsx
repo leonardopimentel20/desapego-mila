@@ -1,3 +1,6 @@
+'use server';
+
+
 import { db } from "../../../../db";
 import { products, productImages } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
@@ -7,6 +10,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SuccessBanner } from "../../../../components/SuccessBanner";
 import { ConfirmButton } from "../../../../components/ConfirmButton";
+
 
 interface EditProductPageProps {
   params: Promise<{ id: string }>;
@@ -46,10 +50,6 @@ export default async function EditProductPage({ params, searchParams }: EditProd
               Atualize as informações, fotos ou estoque do garimpo.
             </p>
           </div>
-          <div className="max-w-3xl mx-auto px-4 md:px-12 pt-6 space-y-3">
-            {photoSuccess === 'excluida' && <SuccessBanner message="🗑️ Foto excluída com sucesso!" />}
-            {photoSuccess === 'capa' && <SuccessBanner message="⭐ Foto definida como capa!" />}
-          </div>
           <Link
             href="/admin"
             className="text-xs text-neutral-700 bg-white border border-neutral-200 px-4 py-2 rounded-full hover:border-pink-500 hover:text-pink-600 transition-all font-semibold shadow-xs"
@@ -58,6 +58,11 @@ export default async function EditProductPage({ params, searchParams }: EditProd
           </Link>
         </div>
       </header>
+
+      <div className="max-w-3xl mx-auto px-4 md:px-12 pt-6 space-y-3">
+        {photoSuccess === 'excluida' && <SuccessBanner message="🗑️ Foto excluída com sucesso!" />}
+        {photoSuccess === 'capa' && <SuccessBanner message="⭐ Foto definida como capa!" />}
+      </div>
 
       <div className="max-w-3xl mx-auto px-4 md:px-12 py-8">
 

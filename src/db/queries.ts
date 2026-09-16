@@ -1,6 +1,6 @@
 import { db } from "./index";
 import { products, productImages } from "./schema";
-import { eq, and, or, gte, like, sql } from "drizzle-orm";
+import { eq, and, or, gte, like, sql, ne } from "drizzle-orm";
 
 export async function getAvailableProducts(
   searchQuery = "", 
@@ -10,8 +10,6 @@ export async function getAvailableProducts(
   genderFilter = "todos",
   sortBy = "recentes"
 ) {
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
   let orderByClause;
   if (sortBy === "menor") {
     orderByClause = sql`${products.price} ASC`;
@@ -53,10 +51,9 @@ export async function getAvailableProducts(
         subCategoryFilter && subCategoryFilter !== "todas" && subCategoryFilter !== "" ? eq(products.subcategory, subCategoryFilter) : undefined,
         genderCondition,
         sizeFilter && sizeFilter !== "todos" ? eq(products.size, sizeFilter) : undefined,
-        or(
-          gte(products.stock, 1),
-          and(eq(products.status, 'SOLD'), gte(products.updatedAt, fiveMinutesAgo))
-        )
+        // Garante que produtos vendidos (status 'SOLD' ou estoque 0) saem da vitrine IMEDIATAMENTE
+        ne(products.status, 'SOLD'),
+        gte(products.stock, 1)
       )
     )
     .orderBy(orderByClause);

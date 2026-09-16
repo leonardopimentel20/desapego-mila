@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Metadata } from "next";
 import { ProductGallery } from "../../../components/ProductGallery";
-import { headers } from "next/headers";
+import { AddToCartButton } from "../../../components/AddToCartButton";
+import { CartButton } from "../../../components/CartButton";
+import { CartDrawer } from "../../../components/CartDrawer";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -53,17 +55,10 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const isSold = stockNum === 0 || product.status === 'SOLD';
   const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(product.price));
 
-  // NOVO: monta o link da página do produto automaticamente
-  const headersList = await headers();
-  const host = headersList.get('host') || 'localhost:3000';
-  const protocol = headersList.get('x-forwarded-proto') || (host.startsWith('localhost') ? 'http' : 'https');
-  const productUrl = `${protocol}://${host}/produtos/${product.slug}`;
-
-  const whatsappMessage = encodeURIComponent(
-    `Olá Mila! Tenho interesse na peça "${product.title}" (${formattedPrice}). Ainda está disponível?\n\n${productUrl}`
-  );
   return (
     <main className="min-h-screen bg-[#F9F8F6] text-neutral-900 font-sans selection:bg-pink-600 selection:text-white pb-20">
+      {/* Drawer Lateral da Sacola */}
+      <CartDrawer />
 
       <header className="border-b border-neutral-200/80 bg-white/90 backdrop-blur-xl sticky top-0 z-40 px-4 md:px-12 py-4 shadow-xs">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -72,12 +67,16 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               Desapego da Mila
             </h1>
           </Link>
-          <Link
-            href="/"
-            className="text-xs text-neutral-700 bg-white border border-neutral-200 px-4 py-2 rounded-full hover:border-pink-500 hover:text-pink-600 transition-all font-semibold shadow-xs"
-          >
-            ← Voltar para a Vitrine
-          </Link>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-xs text-neutral-700 bg-white border border-neutral-200 px-4 py-2 rounded-full hover:border-pink-500 hover:text-pink-600 transition-all font-semibold shadow-xs"
+            >
+              ← Voltar para a Vitrine
+            </Link>
+            <CartButton />
+          </div>
         </div>
       </header>
 
@@ -112,22 +111,19 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             )}
 
             <div className="space-y-3 pt-2">
-              {isSold ? (
-                <div className="w-full bg-neutral-100 text-neutral-500 font-bold py-4 px-6 rounded-2xl text-center text-xs uppercase tracking-wider border border-neutral-200">
-                  Item Vendido 🛑
-                </div>
-              ) : (
-                <a
-                  href={`https://wa.me/5547996473275?text=${whatsappMessage}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
-                >
-                  <span>Comprar via WhatsApp 💚</span>
-                </a>
-              )}
+              <AddToCartButton
+                product={{
+                  id: product.id,
+                  title: product.title,
+                  price: Number(product.price),
+                  size: product.size,
+                  imageUrl: product.images?.[0] || null,
+                  slug: product.slug,
+                }}
+                isSold={isSold}
+              />
               <p className="text-[11px] text-neutral-400 text-center">
-                Atendimento direto com a Mila para combinar o pagamento e frete/retirada.
+                🚚 Envio unificado: adicione várias peças à sacola e finalize o pedido de uma vez só com a Mila via WhatsApp.
               </p>
             </div>
           </div>

@@ -2,7 +2,7 @@
 
 import { db } from "../../db";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { products, productImages } from "../../db/schema";
 import { productSchema } from "../../db/validator";
 import { v2 as cloudinary } from "cloudinary";
@@ -50,6 +50,8 @@ export async function toggleProductStatusAction(productId: string, currentStatus
   revalidatePath("/admin");
   redirect("/admin?success=status");
 }
+
+
 
 export async function updateProductAction(productId: string, formData: FormData): Promise<void> {
   const priceInput = String(formData.get("price") || "").trim();
@@ -258,4 +260,26 @@ export async function createProductAction(formData: FormData): Promise<void> {
   revalidatePath("/");
   revalidatePath("/admin");
   redirect("/admin?success=cadastrado");
+}
+
+export async function reserveProductsAction(
+  productIds: string[], 
+  customerName?: string, 
+  customerPhone?: string
+): Promise<void> {
+  if (!productIds || productIds.length === 0) return;
+  
+  for (const id of productIds) {
+    await db.update(products)
+      .set({
+        status: 'RESERVED',
+        customerName: customerName ? customerName.trim() : "Cliente do WhatsApp",
+        customerPhone: customerPhone ? customerPhone.trim() : "",
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, id));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin");
 }
