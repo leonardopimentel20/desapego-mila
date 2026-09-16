@@ -42,6 +42,9 @@ export function ConfirmButton({
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-neutral-900/50 backdrop-blur-sm"
           onClick={() => setOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -54,7 +57,7 @@ export function ConfirmButton({
             </div>
 
             <div>
-              <h3 className="text-sm font-black text-neutral-900 mb-1">
+              <h3 id="confirm-dialog-title" className="text-sm font-black text-neutral-900 mb-1">
                 {title || (isDanger ? 'Confirmar exclusão' : 'Confirmar ação')}
               </h3>
               <p className="text-xs text-neutral-500 leading-relaxed">{message}</p>

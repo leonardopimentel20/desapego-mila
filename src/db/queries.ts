@@ -1,6 +1,6 @@
 import { db } from "./index";
 import { products, productImages } from "./schema";
-import { eq, and, or, gte, like, sql, ne } from "drizzle-orm";
+import { eq, and, or, gte, like, ne, sql } from "drizzle-orm";
 
 export async function getAvailableProducts(
   searchQuery = "", 
@@ -51,7 +51,6 @@ export async function getAvailableProducts(
         subCategoryFilter && subCategoryFilter !== "todas" && subCategoryFilter !== "" ? eq(products.subcategory, subCategoryFilter) : undefined,
         genderCondition,
         sizeFilter && sizeFilter !== "todos" ? eq(products.size, sizeFilter) : undefined,
-        // Garante que produtos vendidos (status 'SOLD' ou estoque 0) saem da vitrine IMEDIATAMENTE
         ne(products.status, 'SOLD'),
         gte(products.stock, 1)
       )

@@ -1,23 +1,12 @@
 import { db } from "../../db";
-import { products, productImages } from "../../db/schema";
+import { products } from "../../db/schema";
 import { eq, desc, like, sql, sum, count, and } from "drizzle-orm";
-import { deleteProductAction, registerSaleAction, toggleProductStatusAction, createProductAction } from "./actions";
+import { deleteProductAction, registerSaleAction, setProductStatusAction, createProductAction } from "./actions";
 import { SearchBox } from "../../components/SearchBox";
 import { SuccessBanner } from "../../components/SuccessBanner";
 import { ProductForm } from "../../components/ProductForm";
 import { DeleteButton } from "../../components/DeleteButton";
 import Link from "next/link";
-import { productSchema } from "../../db/validator";
-import { randomUUID } from "crypto";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { v2 as cloudinary } from "cloudinary";
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 interface AdminPageProps {
   searchParams: Promise<{ success?: string; search?: string; status?: string }>;
@@ -70,6 +59,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       gender: products.gender,
       customerName: products.customerName,
       customerPhone: products.customerPhone,
+      reservedQuantity: products.reservedQuantity,
       updatedAt: products.updatedAt,
       imageUrl: sql<string>`(SELECT url FROM product_images WHERE product_images.product_id = products.id ORDER BY is_main DESC, id ASC LIMIT 1)`,
     })
@@ -78,6 +68,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .orderBy(desc(products.id)); 
 
   // Lógica para agrupar produtos por cliente quando estiver na aba de Reservados
+  type AdminProduct = (typeof productList)[number];
   const reservedGroups = status === 'RESERVED' ? productList.reduce((acc, product) => {
     const clientKey = product.customerName && product.customerPhone 
       ? `${product.customerName}_${product.customerPhone}` 
@@ -94,9 +85,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     }
     
     acc[clientKey].products.push(product);
-    acc[clientKey].totalValue += Number(product.price);
+    acc[clientKey].totalValue += Number(product.price) * Math.max(product.reservedQuantity, 1);
     return acc;
-  }, {} as Record<string, { customerName: string; customerPhone: string; updatedAt: any; products: any[]; totalValue: number }>) : null;
+  }, {} as Record<string, { customerName: string; customerPhone: string; updatedAt: Date | null; products: AdminProduct[]; totalValue: number }>) : null;
 
   return (
     <main className="min-h-screen bg-[#F9F8F6] text-neutral-900 font-sans p-4 md:p-8">
@@ -219,6 +210,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Garimpos solicitados ({group.products.length}):</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {group.products.map((product) => {
+                          const reservedQuantity = Math.max(product.reservedQuantity, 1);
                           return (
                             <div key={product.id} className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
@@ -232,7 +224,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                 <div>
                                   <h4 className="font-semibold text-neutral-900 text-xs line-clamp-1">{product.title}</h4>
                                   <p className="text-[11px] text-neutral-500">Tam: <strong className="text-pink-600">{product.size}</strong></p>
-                                  <p className="text-xs font-black text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(product.price))}</p>
+                                  <p className="text-[11px] text-neutral-600">Quantidade reservada: <strong>{reservedQuantity}</strong></p>
+                                  <p className="text-xs font-black text-neutral-900">
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(product.price) * reservedQuantity)}
+                                  </p>
                                 </div>
                               </div>
 
@@ -240,7 +235,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <form action={async () => {
                                   'use server';
-                                  await toggleProductStatusAction(product.id, product.status || 'RESERVED');
+                                    await setProductStatusAction(product.id, 'AVAILABLE');
                                 }}>
                                   <button type="submit" className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer" title="Devolve a peça para disponível">
                                     Liberar
@@ -252,7 +247,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                   await registerSaleAction(product.id);
                                 }}>
                                   <button type="submit" className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer">
-                                    Vender
+                                    Vender {reservedQuantity} {reservedQuantity === 1 ? 'unidade' : 'unidades'}
                                   </button>
                                 </form>
                               </div>
@@ -274,7 +269,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   const stockNum = Number(product.stock) || 0;
                   const isSold = product.status === 'SOLD' || stockNum === 0;
                   const isReserved = product.status === 'RESERVED';
-                  const needsToBeAvailable = isSold || isReserved;
+                  const reservedQuantity = Math.max(product.reservedQuantity, 1);
+                  const needsToBeAvailable = isSold;
 
                   return (
                     <div key={product.id} className="bg-white border border-neutral-200/80 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
@@ -294,7 +290,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             </span>
                             {isReserved && (
                               <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded font-extrabold uppercase shadow-xs">
-                                Reservado ⏳
+                                Reservado: {reservedQuantity} {reservedQuantity === 1 ? 'unidade' : 'unidades'} ⏳
                               </span>
                             )}
                             {isSold && (
@@ -322,10 +318,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                         <form action={async () => {
                           'use server';
-                          if (needsToBeAvailable) {
-                            await toggleProductStatusAction(product.id, product.status || 'AVAILABLE');
+                          if (isReserved) {
+                            await registerSaleAction(product.id);
+                          } else if (needsToBeAvailable) {
+                            await setProductStatusAction(product.id, 'AVAILABLE');
                           } else {
-                            // CORRIGIDO: Agora chama registerSaleAction para fazer a baixa gradativa do estoque
                             await registerSaleAction(product.id);
                           }
                         }}>
@@ -334,10 +331,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all cursor-pointer ${
                               needsToBeAvailable
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                : isReserved
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
                             }`}
                           >
-                            {needsToBeAvailable ? 'Marcar Disponível' : 'Marcar Vendido'}
+                            {needsToBeAvailable
+                              ? 'Marcar Disponível'
+                              : isReserved
+                                ? `Vender ${reservedQuantity} ${reservedQuantity === 1 ? 'unidade' : 'unidades'}`
+                                : 'Marcar Vendido'}
                           </button>
                         </form>
 

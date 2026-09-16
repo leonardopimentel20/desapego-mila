@@ -9,12 +9,15 @@ export interface CartItem {
   size: string;
   imageUrl?: string;
   slug: string;
+  stock: number;
+  quantity: number;
 }
 
 interface CartContextType {
   cart: CartItem[];
   addToCart: (item: CartItem) => void;
   removeFromCart: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
@@ -23,7 +26,7 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const CART_STORAGE_KEY = 'desapego_mila_cart_v3'; // Versão nova para limpar cache antigo
+const CART_STORAGE_KEY = 'desapego_mila_cart_v4';
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -37,6 +40,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (savedCart) {
         const parsed = JSON.parse(savedCart);
         if (Array.isArray(parsed)) {
+          // A leitura precisa ocorrer após a hidratação para manter servidor e cliente consistentes.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCart(parsed);
         }
       }
@@ -72,14 +77,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
+  const updateQuantity = (id: string, quantity: number) => {
+    setCart((prevCart) => prevCart.map((item) =>
+      item.id === id
+        ? { ...item, quantity: Math.min(Math.max(1, quantity), item.stock) }
+        : item
+    ));
+  };
+
   const clearCart = () => {
     setCart([]);
     try {
       localStorage.removeItem(CART_STORAGE_KEY);
-    } catch (e) {}
+    } catch {
+      // O carrinho em memória continua funcional se o armazenamento estiver indisponível.
+    }
   };
 
-  const totalPrice = cart.reduce((acc, item) => acc + Number(item.price || 0), 0);
+  const totalPrice = cart.reduce((acc, item) => acc + Number(item.price || 0) * item.quantity, 0);
 
   return (
     <CartContext.Provider
@@ -87,6 +102,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         cart,
         addToCart,
         removeFromCart,
+        updateQuantity,
         clearCart,
         isCartOpen,
         setIsCartOpen,

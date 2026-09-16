@@ -23,10 +23,10 @@ export function DeleteButton({ productId, deleteAction }: DeleteButtonProps) {
 
       {/* Modal Personalizado */}
       {isOpen && (
-        <div className="fixed inset-0 bg-neutral-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-neutral-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
           <div className="bg-white border border-neutral-200/80 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-left animate-in fade-in zoom-in-95 duration-150">
             <div className="space-y-1.5">
-              <h3 className="text-base font-extrabold text-neutral-900">Excluir Garimpo 🗑️</h3>
+              <h3 id="delete-dialog-title" className="text-base font-extrabold text-neutral-900">Excluir Garimpo 🗑️</h3>
               <p className="text-xs text-neutral-500 leading-relaxed">
                 Tem certeza que deseja excluir este item da vitrine? Esta ação não pode ser desfeita.
               </p>
@@ -48,7 +48,7 @@ export function DeleteButton({ productId, deleteAction }: DeleteButtonProps) {
                   setLoading(true);
                   try {
                     await deleteAction(productId);
-                  } catch (error) {
+                  } catch {
                     setLoading(false);
                     setIsOpen(false);
                   }

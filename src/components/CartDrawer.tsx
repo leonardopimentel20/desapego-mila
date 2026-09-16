@@ -4,25 +4,15 @@ import { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { reserveProductsAction } from '../app/admin/actions';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export function CartDrawer() {
-  const { cart, removeFromCart, clearCart, isCartOpen, setIsCartOpen, totalPrice } = useCart();
+  const router = useRouter();
+  const { cart, removeFromCart, updateQuantity, clearCart, isCartOpen, setIsCartOpen, totalPrice } = useCart();
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Função para preencher dados de teste aleatórios rapidamente
-  const fillRandomTestData = () => {
-    const testProfiles = [
-      { name: "Mariana Teste (Garimpo)", phone: "47988881111" },
-      { name: "Camila Estilo Vintage", phone: "41977772222" },
-      { name: "Beatriz Modas Sustentáveis", phone: "48966663333" },
-      { name: "Juliana Looks", phone: "47955554444" }
-    ];
-    const randomProfile = testProfiles[Math.floor(Math.random() * testProfiles.length)];
-    setCustomerName(randomProfile.name);
-    setCustomerPhone(randomProfile.phone);
-  };
+  const [errorMessage, setErrorMessage] = useState('');
 
   if (!isCartOpen) return null;
 
@@ -34,13 +24,14 @@ export function CartDrawer() {
     }
 
     setIsSubmitting(true);
+    setErrorMessage('');
     try {
-      const productIds = cart.map(item => item.id);
-      await reserveProductsAction(productIds, customerName, customerPhone);
-    } catch (e) {
-      console.error("Erro ao registrar reserva", e);
-    } finally {
+      const items = cart.map((item) => ({ productId: item.id, quantity: item.quantity }));
+      await reserveProductsAction(items, customerName, customerPhone);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível concluir a reserva. Tente novamente.");
       setIsSubmitting(false);
+      return;
     }
 
     const phoneNumber = "5547996473275"; // Número do WhatsApp da Mila
@@ -49,9 +40,12 @@ export function CartDrawer() {
     
     cart.forEach((item, index) => {
       const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price);
+      const formattedSubtotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price * item.quantity);
       message += `${index + 1}. *${item.title}*\n`;
       message += `   • Tamanho: ${item.size}\n`;
-      message += `   • Valor: ${formattedPrice}\n`;
+      message += `   • Quantidade: ${item.quantity}\n`;
+      message += `   • Valor unitário: ${formattedPrice}\n`;
+      message += `   • Subtotal: ${formattedSubtotal}\n`;
       if (item.imageUrl) {
         message += `   • Foto: ${item.imageUrl}\n`;
       }
@@ -68,10 +62,12 @@ export function CartDrawer() {
     // Limpa a sacola e fecha o painel lateral automaticamente após enviar
     clearCart();
     setIsCartOpen(false);
+    setIsSubmitting(false);
+    router.refresh();
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="cart-title">
       {/* Overlay escuro */}
       <div 
         className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
@@ -83,11 +79,12 @@ export function CartDrawer() {
           
           {/* Cabeçalho da Sacola */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200">
-            <h2 className="text-base font-bold text-neutral-900">
-              🛍️ Sua Sacola de Garimpos ({cart.length})
+            <h2 id="cart-title" className="text-base font-bold text-neutral-900">
+              🛍️ Sua Sacola de Garimpos ({cart.reduce((total, item) => total + item.quantity, 0)})
             </h2>
             <button
               onClick={() => setIsCartOpen(false)}
+              aria-label="Fechar sacola"
               className="text-neutral-400 hover:text-neutral-700 text-lg font-bold p-1 cursor-pointer"
             >
               ✕
@@ -104,7 +101,7 @@ export function CartDrawer() {
               </div>
             ) : (
               cart.map((item) => {
-                const formattedItemPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(item.price || 0));
+                const formattedItemPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(item.price || 0) * item.quantity);
                 
                 return (
                   <div key={item.id} className="flex items-center justify-between gap-4 bg-neutral-50 border border-neutral-200/80 p-3 rounded-2xl shadow-xs">
@@ -116,10 +113,40 @@ export function CartDrawer() {
                           <div className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400">Sem foto</div>
                         )}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h4 className="font-semibold text-neutral-900 text-xs line-clamp-1">{item.title}</h4>
                         <p className="text-[11px] text-neutral-500 mt-0.5">Tam: <strong className="text-pink-600">{item.size}</strong></p>
-                        <p className="text-xs font-black text-neutral-900 mt-1">{formattedItemPrice}</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                            aria-label={`Diminuir quantidade de ${item.title}`}
+                            className="w-6 h-6 rounded-md border border-neutral-300 bg-white text-neutral-700 font-bold disabled:opacity-40"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={item.stock}
+                            value={item.quantity}
+                            onChange={(event) => updateQuantity(item.id, Number(event.target.value) || 1)}
+                            aria-label={`Quantidade de ${item.title}`}
+                            className="w-11 h-6 rounded-md border border-neutral-300 bg-white text-center text-xs font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            disabled={item.quantity >= item.stock}
+                            aria-label={`Aumentar quantidade de ${item.title}`}
+                            className="w-6 h-6 rounded-md border border-neutral-300 bg-white text-neutral-700 font-bold disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 mt-1">Disponíveis: {item.stock}</p>
+                        <p className="text-xs font-black text-neutral-900 mt-1">Subtotal: {formattedItemPrice}</p>
                       </div>
                     </div>
 
@@ -142,19 +169,13 @@ export function CartDrawer() {
               
               {/* Campos de Identificação da Cliente */}
               <div className="space-y-3 bg-white p-3.5 rounded-2xl border border-neutral-200 shadow-xs">
-                <div className="flex items-center justify-between">
+                <div>
                   <p className="text-[11px] font-bold text-neutral-700 uppercase tracking-wide">Seus Dados para Reserva:</p>
-                  <button
-                    type="button"
-                    onClick={fillRandomTestData}
-                    className="text-[10px] bg-pink-50 text-pink-600 border border-pink-100 hover:bg-pink-100 font-bold px-2 py-0.5 rounded-lg transition-all cursor-pointer"
-                    title="Preenche com dados fictícios para testar o agrupamento"
-                  >
-                    ⚡ Preencher Teste
-                  </button>
                 </div>
                 <div>
+                  <label htmlFor="customer-name" className="sr-only">Nome completo</label>
                   <input
+                    id="customer-name"
                     type="text"
                     required
                     placeholder="Seu Nome Completo"
@@ -164,8 +185,11 @@ export function CartDrawer() {
                   />
                 </div>
                 <div>
+                  <label htmlFor="customer-phone" className="sr-only">WhatsApp com DDD</label>
                   <input
+                    id="customer-phone"
                     type="text"
+                    inputMode="tel"
                     required
                     placeholder="Seu WhatsApp (com DDD)"
                     value={customerPhone}
@@ -174,6 +198,12 @@ export function CartDrawer() {
                   />
                 </div>
               </div>
+
+              {errorMessage && (
+                <p role="alert" className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+                  {errorMessage}
+                </p>
+              )}
 
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Total dos Garimpos:</span>
@@ -190,6 +220,9 @@ export function CartDrawer() {
                 <span>{isSubmitting ? 'Registrando...' : 'Finalizar Reserva via WhatsApp'}</span>
                 <span className="text-base">💬</span>
               </button>
+              <p className="text-center text-[10px] text-neutral-500">
+                A reserva é confirmada ao concluir esta etapa.
+              </p>
 
               <div className="flex items-center justify-between pt-2">
                 <Link

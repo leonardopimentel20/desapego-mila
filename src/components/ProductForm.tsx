@@ -96,13 +96,22 @@ export function ProductForm({ action }: ProductFormProps) {
       const files = Array.from(e.target.files);
       const newItems: ImageItem[] = [];
 
+      if (selectedImages.length + files.length > 6) {
+        setErrorMessage("Selecione no máximo 6 fotos.");
+        e.target.value = '';
+        return;
+      }
+
       for (const file of files) {
         try {
+          if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+            throw new Error("Cada foto deve ser JPG, PNG ou WebP e ter no máximo 10 MB.");
+          }
           const base64 = await convertFileToBase64(file);
           const preview = URL.createObjectURL(file);
           newItems.push({ preview, base64 });
-        } catch (err) {
-          console.error("Erro ao ler arquivo", err);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Não foi possível ler uma das fotos.");
         }
       }
 
@@ -112,7 +121,10 @@ export function ProductForm({ action }: ProductFormProps) {
   };
 
   const removeImage = (indexToRemove: number) => {
-    setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
+    setSelectedImages(prev => {
+      URL.revokeObjectURL(prev[indexToRemove].preview);
+      return prev.filter((_, index) => index !== indexToRemove);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -137,17 +149,18 @@ export function ProductForm({ action }: ProductFormProps) {
       });
 
       await action(formData);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const actionError = error instanceof Error ? error : null;
       // CORREÇÃO CRUCIAL: Se o erro for o redirecionamento interno do Next.js, ignore-o (pois deu tudo certo!)
       if (
-        error?.message === "NEXT_REDIRECT" ||
-        error?.digest?.includes("NEXT_REDIRECT") ||
-        error?.message?.includes("NEXT_REDIRECT")
+        actionError?.message === "NEXT_REDIRECT" ||
+        (typeof error === "object" && error !== null && "digest" in error && String(error.digest).includes("NEXT_REDIRECT")) ||
+        actionError?.message.includes("NEXT_REDIRECT")
       ) {
         return;
       }
 
-      let message = error?.message || "Ocorreu um erro ao cadastrar a peça.";
+      let message = actionError?.message || "Ocorreu um erro ao cadastrar a peça.";
 
       if (message.includes("Unexpected end of form") || message.includes("exceeded") || message.includes("body")) {
         message = "O tamanho total das fotos enviadas ultrapassou o limite ou a conexão foi interrompida. Tente enviar fotos com menor resolução.";
@@ -301,11 +314,13 @@ export function ProductForm({ action }: ProductFormProps) {
               <p className="text-[10px] text-neutral-400 mt-0.5">
                 {selectedImages.length === 0 ? "Nenhuma foto selecionada" : `${selectedImages.length} foto(s) pronta(s) para envio`}
               </p>
+              <p className="text-[10px] text-neutral-400">Até 6 fotos JPG, PNG ou WebP de 10 MB cada</p>
             </div>
             <input
               type="file"
               accept="image/*"
-              multiple
+            multiple
+              aria-label="Selecionar fotos da peça"
               onChange={handleFileChange}
               className="hidden"
             />

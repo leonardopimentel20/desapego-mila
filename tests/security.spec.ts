@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 // ⚠️ Coloque exatamente a senha real que está no seu arquivo .env da aplicação
-const ADMIN_SENHA_REAL = process.env.ADMIN_PASSWORD || '123456'; 
+const ADMIN_SENHA_REAL = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_SENHA_REAL) {
+  throw new Error('ADMIN_PASSWORD precisa estar configurada para executar os testes de segurança.');
+}
 
 test.describe('Testes de Segurança e Blindagem - Desapego da Mila', () => {
   // ... mesmos testes anteriores
@@ -21,5 +25,18 @@ test.describe('Testes de Segurança e Blindagem - Desapego da Mila', () => {
     expect(sessionCookie).toBeDefined();
     expect(sessionCookie?.httpOnly).toBe(true);
     expect(sessionCookie?.sameSite).toBe('Lax');
+  });
+
+  test('deve rejeitar cookie de sessão falsificado', async ({ context, page }) => {
+    await context.addCookies([{
+      name: 'admin_session',
+      value: 'cookie-falsificado',
+      domain: 'localhost',
+      path: '/',
+    }]);
+
+    await page.goto('/admin');
+
+    await expect(page).toHaveURL(/\/admin\/login/);
   });
 });

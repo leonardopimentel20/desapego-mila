@@ -27,8 +27,6 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
   // Busca sugestões conforme o usuário digita
   useEffect(() => {
     if (!query || query.trim().length < 2) {
-      setSuggestions([]);
-      setIsOpen(false);
       return;
     }
 
@@ -112,12 +110,24 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            const nextQuery = e.target.value;
+            setQuery(nextQuery);
+            if (nextQuery.trim().length < 2) {
+              setSuggestions([]);
+              setIsOpen(false);
+            }
+          }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
             if (suggestions.length > 0) setIsOpen(true);
           }}
           placeholder={placeholder}
+          aria-label={placeholder}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isOpen}
+          aria-controls="search-suggestions"
           className="w-full bg-white border border-neutral-300 rounded-full px-5 py-2.5 text-xs text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-pink-600 transition-all shadow-xs"
         />
         <button
@@ -131,7 +141,7 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
 
       {isOpen && suggestions.length > 0 && (
         <div className="absolute left-0 right-0 mt-2 bg-white border border-neutral-200 rounded-2xl shadow-xl overflow-hidden z-50">
-          <ul className="py-2">
+          <ul id="search-suggestions" role="listbox" className="py-2">
             {suggestions.map((item, index) => (
               <li key={item.id}>
                 <button
@@ -141,6 +151,8 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
                     handleSearch(item.title);
                   }}
                   onMouseEnter={() => setSelectedIndex(index)}
+                  role="option"
+                  aria-selected={selectedIndex === index}
                   className={`w-full text-left px-5 py-2.5 text-xs transition-colors flex items-center justify-between ${
                     selectedIndex === index ? 'bg-pink-50 text-pink-600 font-bold' : 'text-neutral-700 hover:bg-neutral-50'
                   }`}

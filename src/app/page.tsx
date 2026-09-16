@@ -167,13 +167,13 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
 
         <nav aria-label="Navegação Secundária" className="max-w-7xl mx-auto flex items-center gap-6 overflow-x-auto pt-4 pb-1 text-xs font-semibold text-neutral-600 scrollbar-none border-t border-neutral-100 mt-3">
-          <a href="/?category=novidades" className="hover:text-pink-600 transition-colors whitespace-nowrap text-pink-600 font-bold">✨ Recém Chegados</a>
-          <a href="/?category=roupas" className="hover:text-pink-600 transition-colors whitespace-nowrap">👗 Roupas</a>
-          <a href="/?category=acessorios" className="hover:text-pink-600 transition-colors whitespace-nowrap">👜 Acessórios</a>
-          <a href="/?category=calcados" className="hover:text-pink-600 transition-colors whitespace-nowrap">👠 Calçados</a>
-          <a href="/?category=utilidades" className="hover:text-pink-600 transition-colors whitespace-nowrap">🏠 Utilidades</a>
-          <a href="/?category=brinquedos" className="hover:text-pink-600 transition-colors whitespace-nowrap">🧸 Brinquedos</a>
-          <a href="/?category=perfumaria" className="hover:text-pink-600 transition-colors whitespace-nowrap">✨ Perfumaria</a>
+          <Link href="/?category=novidades" className="hover:text-pink-600 transition-colors whitespace-nowrap text-pink-600 font-bold">✨ Recém Chegados</Link>
+          <Link href="/?category=roupas" className="hover:text-pink-600 transition-colors whitespace-nowrap">👗 Roupas</Link>
+          <Link href="/?category=acessorios" className="hover:text-pink-600 transition-colors whitespace-nowrap">👜 Acessórios</Link>
+          <Link href="/?category=calcados" className="hover:text-pink-600 transition-colors whitespace-nowrap">👠 Calçados</Link>
+          <Link href="/?category=utilidades" className="hover:text-pink-600 transition-colors whitespace-nowrap">🏠 Utilidades</Link>
+          <Link href="/?category=brinquedos" className="hover:text-pink-600 transition-colors whitespace-nowrap">🧸 Brinquedos</Link>
+          <Link href="/?category=perfumaria" className="hover:text-pink-600 transition-colors whitespace-nowrap">✨ Perfumaria</Link>
         </nav>
       </header>
 
@@ -182,7 +182,7 @@ export default async function Home({ searchParams }: HomeProps) {
           <section aria-label="Atalhos rápidos" className="relative">
             <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x">
               {shortcutCategories.map((item, index) => (
-                <a
+                <Link
                   key={index}
                   href={`/?category=${item.cat}`}
                   className="flex flex-col items-center gap-2.5 flex-shrink-0 group cursor-pointer snap-start"
@@ -193,7 +193,7 @@ export default async function Home({ searchParams }: HomeProps) {
                   <span className="text-xs font-semibold text-neutral-700 group-hover:text-pink-600 transition-colors text-center tracking-wide">
                     {item.label}
                   </span>
-                </a>
+                </Link>
               ))}
             </div>
           </section>
@@ -204,7 +204,7 @@ export default async function Home({ searchParams }: HomeProps) {
           <aside className="bg-white border border-neutral-200/80 rounded-3xl p-6 space-y-6 lg:sticky lg:top-32 shadow-sm">
             <div>
               <h3 className="text-xs font-extrabold text-neutral-900 uppercase tracking-widest mb-1">Filtrar Vitrine</h3>
-              <p className="text-[11px] text-neutral-500">{products.length} peças disponíveis</p>
+              <p className="text-[11px] text-neutral-500">{products.length} itens na vitrine</p>
             </div>
 
             {/* Categorias Principais */}
@@ -213,12 +213,12 @@ export default async function Home({ searchParams }: HomeProps) {
               <ul className="space-y-1 text-xs">
                 {categories.map((cat) => (
                   <li key={cat.id}>
-                    <a
+                    <Link
                       href={`/?category=${cat.id}&size=${size}&gender=${gender}`}
                       className={`block px-3 py-2 rounded-xl transition-all ${category === cat.id ? 'bg-pink-600 text-white font-bold shadow-sm' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'}`}
                     >
                       {cat.label}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -231,12 +231,12 @@ export default async function Home({ searchParams }: HomeProps) {
                 <ul className="space-y-1 text-xs max-h-56 overflow-y-auto scrollbar-none">
                   {currentSubcategories.map((sub) => (
                     <li key={sub.id}>
-                      <a
+                      <Link
                         href={`/?category=${category}&subcategory=${sub.id}&size=${size}&gender=${gender}&sort=${sort}`}
                         className={`block px-3 py-1.5 rounded-xl transition-all ${subcategory === sub.id ? 'bg-neutral-900 text-white font-bold' : 'text-neutral-600 hover:bg-neutral-100'}`}
                       >
                         {sub.label}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -248,13 +248,13 @@ export default async function Home({ searchParams }: HomeProps) {
               <h4 className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Público / Gênero</h4>
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {genders.map((g) => (
-                  <a
+                  <Link
                     key={g.id}
                     href={`/?category=${category}&subcategory=${subcategory}&size=${size}&gender=${g.id}&sort=${sort}`}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${gender === g.id ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:border-neutral-400'}`}
                   >
                     {g.label}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -264,13 +264,13 @@ export default async function Home({ searchParams }: HomeProps) {
               <h4 className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Tamanhos / Numeração</h4>
               <div className="flex flex-wrap gap-1.5 pt-1 max-h-48 overflow-y-auto scrollbar-none">
                 {sizes.map((s) => (
-                  <a
+                  <Link
                     key={s}
                     href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${s}&sort=${sort}`}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${size === s ? 'bg-neutral-900 text-white border-neutral-900 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:border-neutral-400'}`}
                   >
                     {s === 'todos' ? 'Todos' : s}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -280,14 +280,14 @@ export default async function Home({ searchParams }: HomeProps) {
           <div className="lg:col-span-3 space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-neutral-200/80 p-4 rounded-3xl shadow-xs">
               <div className="text-xs font-medium text-neutral-600 pl-2">
-                Exibindo <strong className="text-pink-600">{products.length}</strong> peças disponíveis
+                Exibindo <strong className="text-pink-600">{products.length}</strong> itens na vitrine
               </div>
 
               <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-end">
                 <span className="text-neutral-500 font-semibold">Ordenar:</span>
-                <a href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=recentes`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'recentes' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Recentes</a>
-                <a href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=menor`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'menor' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Menor Preço</a>
-                <a href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=maior`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'maior' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Maior Preço</a>
+                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=recentes`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'recentes' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Recentes</Link>
+                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=menor`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'menor' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Menor Preço</Link>
+                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=maior`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'maior' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Maior Preço</Link>
               </div>
             </div>
 
@@ -295,7 +295,7 @@ export default async function Home({ searchParams }: HomeProps) {
               <div className="bg-white border border-neutral-200/80 rounded-3xl p-16 text-center space-y-3 shadow-xs">
                 <p className="text-lg font-bold text-neutral-800">Nenhum garimpo encontrado</p>
                 <p className="text-xs text-neutral-500">Tente buscar por outro termo ou alterar os filtros no menu lateral.</p>
-                <a href="/" className="inline-block mt-2 text-xs bg-pink-600 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm">Limpar Filtros</a>
+                <Link href="/" className="inline-block mt-2 text-xs bg-pink-600 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm">Limpar Filtros</Link>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -327,7 +327,7 @@ export default async function Home({ searchParams }: HomeProps) {
                             <span className="bg-neutral-900 text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-xs">Vendido</span>
                           )}
                           {isReserved && (
-                            <span className="bg-amber-500 text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-xs">Reservado ⏳</span>
+                            <span className="bg-amber-500 text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-xs">Reservado · Em alta procura</span>
                           )}
                         </div>
 

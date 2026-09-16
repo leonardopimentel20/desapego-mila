@@ -17,6 +17,7 @@ export const products = mysqlTable('products', {
 
   customerName: varchar('customer_name', { length: 255 }),
   customerPhone: varchar('customer_phone', { length: 50 }),
+  reservedQuantity: int('reserved_quantity').notNull().default(0),
 });
 
 export const productImages = mysqlTable('product_images', {

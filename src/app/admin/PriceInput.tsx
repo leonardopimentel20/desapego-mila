@@ -12,7 +12,7 @@ export function PriceInput({ initialValue = 0 }: PriceInputProps) {
   );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let rawValue = e.target.value.replace(/\D/g, '');
+    const rawValue = e.target.value.replace(/\D/g, '');
     if (!rawValue) {
       setValue('');
       return;

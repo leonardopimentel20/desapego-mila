@@ -129,6 +129,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                     size: product.size,
                     imageUrl: product.images?.[0] || null,
                     slug: product.slug,
+                    stock: stockNum,
                   }}
                   isSold={isSold}
                 />

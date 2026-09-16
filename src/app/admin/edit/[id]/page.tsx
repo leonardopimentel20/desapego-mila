@@ -103,7 +103,7 @@ export default async function EditProductPage({ params, searchParams }: EditProd
                 <label className="block text-xs font-bold text-neutral-600 mb-1.5 uppercase">Público / Gênero *</label>
                 <select
                   name="gender"
-                  defaultValue={(product as any).gender || "feminino"}
+                  defaultValue={product.gender || "feminino"}
                   className="w-full bg-neutral-50 border border-neutral-200 rounded-2xl px-4 py-3 text-xs text-neutral-900 focus:border-pink-600 focus:bg-white outline-none transition-all"
                 >
                   <option value="feminino">👩 Feminino</option>
@@ -186,7 +186,7 @@ export default async function EditProductPage({ params, searchParams }: EditProd
                 <label className="block text-xs font-bold text-neutral-600 mb-1.5 uppercase">Subcategoria (Roupas)</label>
                 <select
                   name="subcategory"
-                  defaultValue={(product as any).subcategory || "geral"}
+                  defaultValue={product.subcategory || "geral"}
                   className="w-full bg-neutral-50 border border-neutral-200 rounded-2xl px-4 py-3 text-xs text-neutral-900 focus:border-pink-600 focus:bg-white outline-none transition-all"
                 >
                   <option value="geral">Geral / Outros</option>
