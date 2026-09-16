@@ -13,6 +13,7 @@ export const products = mysqlTable('products', {
   size: varchar('size', { length: 10 }).notNull().default('M'),
   status: varchar('status', { length: 20 }).notNull().default('AVAILABLE'),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+  
 
   customerName: varchar('customer_name', { length: 255 }),
   customerPhone: varchar('customer_phone', { length: 50 }),

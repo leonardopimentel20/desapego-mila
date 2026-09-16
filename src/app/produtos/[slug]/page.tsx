@@ -111,17 +111,28 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             )}
 
             <div className="space-y-3 pt-2">
-              <AddToCartButton
-                product={{
-                  id: product.id,
-                  title: product.title,
-                  price: Number(product.price),
-                  size: product.size,
-                  imageUrl: product.images?.[0] || null,
-                  slug: product.slug,
-                }}
-                isSold={isSold}
-              />
+              {/* Verificação de status para o botão de compra */}
+              {product.status === 'RESERVED' ? (
+                <div className="w-full bg-amber-500 text-white font-bold py-3.5 px-6 rounded-2xl text-center text-xs uppercase tracking-wider">
+                  Item Reservado ⏳
+                </div>
+              ) : product.status === 'SOLD' || isSold ? (
+                <div className="w-full bg-neutral-900 text-white font-bold py-3.5 px-6 rounded-2xl text-center text-xs uppercase tracking-wider">
+                  Item Vendido ❌
+                </div>
+              ) : (
+                <AddToCartButton
+                  product={{
+                    id: product.id,
+                    title: product.title,
+                    price: Number(product.price),
+                    size: product.size,
+                    imageUrl: product.images?.[0] || null,
+                    slug: product.slug,
+                  }}
+                  isSold={isSold}
+                />
+              )}
               <p className="text-[11px] text-neutral-400 text-center">
                 🚚 Envio unificado: adicione várias peças à sacola e finalize o pedido de uma vez só com a Mila via WhatsApp.
               </p>

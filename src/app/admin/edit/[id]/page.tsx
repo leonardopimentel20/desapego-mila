@@ -66,7 +66,7 @@ export default async function EditProductPage({ params, searchParams }: EditProd
 
       <div className="max-w-3xl mx-auto px-4 md:px-12 py-8">
 
-        {/* Formulário de Edição */}
+        {/* Formulário de Edição Principal */}
         <div className="bg-white border border-neutral-200/80 rounded-3xl p-6 md:p-8 shadow-xs space-y-4">
           <form action={updateProductAction.bind(null, product.id)} className="space-y-4">
 
@@ -235,57 +235,6 @@ export default async function EditProductPage({ params, searchParams }: EditProd
               ></textarea>
             </div>
 
-            {images.length > 0 && (
-              <div>
-                <label className="block text-xs font-bold text-neutral-600 mb-2 uppercase">Fotos Atuais Cadastradas</label>
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  {images.map((img) => (
-                    <div key={img.id} className="w-24 flex-shrink-0 space-y-1.5">
-                      <div className={`w-24 h-24 rounded-2xl overflow-hidden border-2 bg-neutral-100 relative ${img.isMain ? 'border-pink-600' : 'border-neutral-200'}`}>
-                        <img src={img.url} alt="Foto do produto" className="w-full h-full object-cover" />
-                        {img.isMain === 1 && (
-                          <span className="absolute top-1 left-1 bg-pink-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                            Capa
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        {img.isMain !== 1 && (
-                          <form action={async () => {
-                            'use server';
-                            await setMainImageAction(img.id, product.id);
-                          }}>
-                            <button
-                              type="submit"
-                              className="w-full text-[9px] bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border border-neutral-200 rounded-lg py-1 cursor-pointer transition-all font-semibold"
-                            >
-                              Definir capa
-                            </button>
-                          </form>
-                        )}
-
-                        <form action={async () => {
-                          'use server';
-                          await deleteProductImageAction(img.id, product.id);
-                        }}>
-                          <ConfirmButton
-                            variant="danger"
-                            title="Excluir foto"
-                            message="Excluir esta foto? Essa ação não pode ser desfeita."
-                            confirmLabel="Excluir"
-                            className="w-full text-[9px] bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg py-1 cursor-pointer transition-all font-semibold"
-                          >
-                            Excluir
-                          </ConfirmButton>
-                        </form>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div>
               <label className="block text-xs font-bold text-neutral-600 mb-1.5 uppercase">Adicionar Novas Fotos (Opcional)</label>
               <input
@@ -306,6 +255,59 @@ export default async function EditProductPage({ params, searchParams }: EditProd
               Salvar Alterações
             </ConfirmButton>
           </form>
+
+          {/* Seção de Fotos Atuais (Separada do formulário principal para evitar o erro de HTML) */}
+          {images.length > 0 && (
+            <div className="pt-4 border-t border-neutral-200">
+              <label className="block text-xs font-bold text-neutral-600 mb-2 uppercase">Fotos Atuais Cadastradas</label>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {images.map((img) => (
+                  <div key={img.id} className="w-24 flex-shrink-0 space-y-1.5">
+                    <div className={`w-24 h-24 rounded-2xl overflow-hidden border-2 bg-neutral-100 relative ${img.isMain ? 'border-pink-600' : 'border-neutral-200'}`}>
+                      <img src={img.url} alt="Foto do produto" className="w-full h-full object-cover" />
+                      {img.isMain === 1 && (
+                        <span className="absolute top-1 left-1 bg-pink-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                          Capa
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      {img.isMain !== 1 && (
+                        <form action={async () => {
+                          'use server';
+                          await setMainImageAction(img.id, product.id);
+                        }}>
+                          <button
+                            type="submit"
+                            className="w-full text-[9px] bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border border-neutral-200 rounded-lg py-1 cursor-pointer transition-all font-semibold"
+                          >
+                            Definir capa
+                          </button>
+                        </form>
+                      )}
+
+                      <form action={async () => {
+                        'use server';
+                        await deleteProductImageAction(img.id, product.id);
+                      }}>
+                        <ConfirmButton
+                          variant="danger"
+                          title="Excluir foto"
+                          message="Excluir esta foto? Essa ação não pode ser desfeita."
+                          confirmLabel="Excluir"
+                          className="w-full text-[9px] bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 rounded-lg py-1 cursor-pointer transition-all font-semibold"
+                        >
+                          Excluir
+                        </ConfirmButton>
+                      </form>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
       </div>

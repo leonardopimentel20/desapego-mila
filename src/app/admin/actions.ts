@@ -36,22 +36,24 @@ export async function setMainImageAction(imageId: string, productId: string): Pr
   revalidatePath("/admin");
   revalidatePath(`/admin/edit/${productId}`);
 }
+
 export async function toggleProductStatusAction(productId: string, currentStatus: string): Promise<void> {
   const newStatus = currentStatus === 'AVAILABLE' ? 'SOLD' : 'AVAILABLE';
+  const newStock = newStatus === 'AVAILABLE' ? 1 : 0;
 
   await db.update(products)
     .set({
       status: newStatus,
+      stock: newStock,
+      customerName: null,
+      customerPhone: null,
       updatedAt: new Date(),
     })
     .where(eq(products.id, productId));
 
   revalidatePath("/");
   revalidatePath("/admin");
-  redirect("/admin?success=status");
 }
-
-
 
 export async function updateProductAction(productId: string, formData: FormData): Promise<void> {
   const priceInput = String(formData.get("price") || "").trim();
@@ -94,14 +96,14 @@ export async function updateProductAction(productId: string, formData: FormData)
       subcategory,
       gender,
       size,
+      updatedAt: new Date(),
     })
     .where(eq(products.id, productId));
 
-  const imageFiles = formData.getAll("images") as File[];
-  if (imageFiles && imageFiles.length > 0 && imageFiles[0].size > 0) {
-    for (let i = 0; i < imageFiles.length; i++) {
-      const imageFile = imageFiles[i];
-      if (imageFile && imageFile.size > 0) {
+  const imageFiles = formData.getAll("images");
+  if (imageFiles && imageFiles.length > 0) {
+    for (const imageFile of imageFiles) {
+      if (imageFile instanceof File && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
@@ -132,26 +134,36 @@ export async function updateProductAction(productId: string, formData: FormData)
   redirect("/admin?success=atualizado");
 }
 
+// Registrar Venda de forma gradativa para múltiplos estoques
 export async function registerSaleAction(productId: string): Promise<void> {
-  const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-
+  const [product] = await db.select().from(products).where(eq(products.id, productId));
+  
   if (!product) return;
 
-  const currentStock = Number(product.stock) || 1;
+  const currentStock = Number(product.stock) || 0;
+  const newStock = Math.max(0, currentStock - 1);
 
-  if (currentStock > 1) {
+  if (newStock > 0) {
+    // Se ainda há estoque restante (ex: de 10 vai para 9), diminui 1, 
+    // limpa os dados da cliente e mantém o produto disponível na vitrine.
     await db.update(products)
       .set({
-        stock: currentStock - 1,
-        updatedAt: new Date()
+        stock: newStock,
+        status: 'AVAILABLE',
+        customerName: null,
+        customerPhone: null,
+        updatedAt: new Date(),
       })
       .where(eq(products.id, productId));
   } else {
+    // Se chegou a 0 (última unidade), zera o estoque e marca como Vendido (SOLD)
     await db.update(products)
       .set({
         stock: 0,
         status: 'SOLD',
-        updatedAt: new Date()
+        customerName: null,
+        customerPhone: null,
+        updatedAt: new Date(),
       })
       .where(eq(products.id, productId));
   }
@@ -199,34 +211,40 @@ export async function createProductAction(formData: FormData): Promise<void> {
     .replace(/\s+/g, "-");
 
   const productId = randomUUID();
-  const imageFiles = formData.getAll("images") as File[];
+  const imageBase64s = formData.getAll("imagesBase64") as string[];
   const uploadedUrls: string[] = [];
 
-  if (imageFiles && imageFiles.length > 0) {
+  if (imageBase64s && imageBase64s.length > 0) {
     try {
-      for (const imageFile of imageFiles) {
-        if (imageFile && imageFile.size > 0) {
-          const arrayBuffer = await imageFile.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
+      for (const base64Str of imageBase64s) {
+        if (!base64Str || typeof base64Str !== "string") continue;
 
-          const imageUrl = await new Promise<string>((resolve, reject) => {
-            const uploadStream = cloudinary.uploader.upload_stream(
-              { folder: "desapego-mila" },
-              (error, result) => {
-                if (error) {
-                  reject(error);
-                } else if (result) {
-                  resolve(result.secure_url);
-                } else {
-                  reject(new Error("Nenhum retorno recebido do Cloudinary."));
-                }
+        // Extrai os dados do Base64 após a vírgula de forma limpa
+        const commaIndex = base64Str.indexOf(",");
+        if (commaIndex === -1) continue;
+        
+        const base64Data = base64Str.slice(commaIndex + 1);
+        const buffer = Buffer.from(base64Data, "base64");
+
+        if (buffer.length === 0) continue;
+
+        const imageUrl = await new Promise<string>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: "desapego-mila" },
+            (error, result) => {
+              if (error) {
+                reject(error);
+              } else if (result) {
+                resolve(result.secure_url);
+              } else {
+                reject(new Error("Nenhum retorno recebido do Cloudinary."));
               }
-            );
-            uploadStream.end(buffer);
-          });
+            }
+          );
+          uploadStream.end(buffer);
+        });
 
-          uploadedUrls.push(imageUrl);
-        }
+        uploadedUrls.push(imageUrl);
       }
     } catch (uploadError: any) {
       const errorMsg = uploadError?.message || String(uploadError);
@@ -261,14 +279,13 @@ export async function createProductAction(formData: FormData): Promise<void> {
   revalidatePath("/admin");
   redirect("/admin?success=cadastrado");
 }
-
 export async function reserveProductsAction(
-  productIds: string[], 
-  customerName?: string, 
+  productIds: string[],
+  customerName?: string,
   customerPhone?: string
 ): Promise<void> {
   if (!productIds || productIds.length === 0) return;
-  
+
   for (const id of productIds) {
     await db.update(products)
       .set({

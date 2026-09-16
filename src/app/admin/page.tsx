@@ -1,10 +1,11 @@
 import { db } from "../../db";
 import { products, productImages } from "../../db/schema";
 import { eq, desc, like, sql, sum, count, and } from "drizzle-orm";
-import { deleteProductAction, registerSaleAction, toggleProductStatusAction } from "./actions";
+import { deleteProductAction, registerSaleAction, toggleProductStatusAction, createProductAction } from "./actions";
 import { SearchBox } from "../../components/SearchBox";
 import { SuccessBanner } from "../../components/SuccessBanner";
 import { ProductForm } from "../../components/ProductForm";
+import { DeleteButton } from "../../components/DeleteButton";
 import Link from "next/link";
 import { productSchema } from "../../db/validator";
 import { randomUUID } from "crypto";
@@ -55,7 +56,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     conditions.push(eq(products.status, 'SOLD'));
   }
 
-  // [ALTERAÇÃO 1]: Adicionado customerName, customerPhone e updatedAt na consulta
+  // Consulta incluindo os dados da cliente e data de reserva
   const productList = await db
     .select({
       id: products.id,
@@ -76,7 +77,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(products.id)); 
 
-  // [ALTERAÇÃO 2]: Lógica para agrupar produtos por cliente quando estiver na aba de Reservados
+  // Lógica para agrupar produtos por cliente quando estiver na aba de Reservados
   const reservedGroups = status === 'RESERVED' ? productList.reduce((acc, product) => {
     const clientKey = product.customerName && product.customerPhone 
       ? `${product.customerName}_${product.customerPhone}` 
@@ -96,86 +97,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     acc[clientKey].totalValue += Number(product.price);
     return acc;
   }, {} as Record<string, { customerName: string; customerPhone: string; updatedAt: any; products: any[]; totalValue: number }>) : null;
-
-  async function handleCreate(formData: FormData) {
-    'use server';
-    const priceInput = String(formData.get("price") || "").trim();
-    const sanitizedPrice = priceInput.replace(/[^\d,]/g, "").replace(",", ".");
-    const stockInput = String(formData.get("stock") || "").trim();
-
-    const subcategory = String(formData.get("subcategory") || "todas");
-    const gender = String(formData.get("gender") || "todos");
-
-    const rawData = {
-      title: formData.get("title"),
-      description: formData.get("description") || "",
-      price: sanitizedPrice === "" ? NaN : Number(sanitizedPrice),
-      stock: stockInput === "" ? NaN : Number(stockInput),
-      categoryId: formData.get("categoryId") || "roupas",
-      size: formData.get("size") || "M",
-    };
-
-    const validation = productSchema.safeParse(rawData);
-    if (!validation.success) {
-      throw new Error(validation.error.issues[0].message);
-    }
-
-    const { title, description, price, stock, categoryId, size } = validation.data;
-    const slug = title
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-");
-
-    const productId = randomUUID();
-    const imageFiles = formData.getAll("images") as File[];
-
-    await db.insert(products).values({
-      id: productId,
-      title,
-      slug: `${slug}-${productId.slice(0, 5)}`,
-      description: description || null,
-      price: price.toString(),
-      stock,
-      categoryId,
-      subcategory,
-      gender,
-      size,
-      status: "AVAILABLE",
-    });
-
-    for (let i = 0; i < imageFiles.length; i++) {
-      const imageFile = imageFiles[i];
-      if (imageFile && imageFile.size > 0) {
-        const arrayBuffer = await imageFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        const imageUrl = await new Promise<string>((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            { folder: "desapego-mila" },
-            (error, result) => {
-              if (error) reject(error);
-              else if (result) resolve(result.secure_url);
-              else reject(new Error("Erro no upload"));
-            }
-          );
-          uploadStream.end(buffer);
-        });
-
-        await db.insert(productImages).values({
-          id: randomUUID(),
-          url: imageUrl,
-          isMain: i === 0 ? 1 : 0,
-          productId,
-        });
-      }
-    }
-
-    revalidatePath("/");
-    revalidatePath("/admin");
-    redirect("/admin?success=cadastrado");
-  }
 
   return (
     <main className="min-h-screen bg-[#F9F8F6] text-neutral-900 font-sans p-4 md:p-8">
@@ -220,9 +141,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {success === 'cadastrado' && <SuccessBanner message="✨ Peça cadastrada com sucesso na vitrine!" />}
         {success === 'atualizado' && <SuccessBanner message="💾 Alterações salvas com sucesso!" />}
         {success === 'status' && <SuccessBanner message="🔄 Status do produto atualizado!" />}
+        {success === 'excluido' && <SuccessBanner message="🗑️ Garimpo excluído com sucesso!" />}
 
-        {/* Formulário Dinâmico de Cadastro */}
-        <ProductForm action={handleCreate} />
+        {/* Formulário Dinâmico de Cadastro usando a action centralizada */}
+        <ProductForm action={createProductAction} />
 
         {/* Lista de Gerenciamento */}
         <div className="space-y-4">
@@ -261,7 +183,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             </Link>
           </div>
 
-          {/* [ALTERAÇÃO 3]: Renderização inteligente (Cards Agrupados para Reservados vs Linhas normais para outros) */}
+          {/* Renderização em Cards para Reservados vs Linhas normais para outros */}
           <div className="space-y-3">
             {status === 'RESERVED' && reservedGroups ? (
               Object.keys(reservedGroups).length === 0 ? (
@@ -297,7 +219,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Garimpos solicitados ({group.products.length}):</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {group.products.map((product) => {
-                          const stockNum = Number(product.stock) || 0;
                           return (
                             <div key={product.id} className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
@@ -319,15 +240,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <form action={async () => {
                                   'use server';
+                                  await toggleProductStatusAction(product.id, product.status || 'RESERVED');
+                                }}>
+                                  <button type="submit" className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer" title="Devolve a peça para disponível">
+                                    Liberar
+                                  </button>
+                                </form>
+                                <form action={async () => {
+                                  'use server';
+                                  // Chama a venda gradativa para decrementar o estoque corretamente
                                   await registerSaleAction(product.id);
                                 }}>
                                   <button type="submit" className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer">
                                     Vender
                                   </button>
                                 </form>
-                                <Link href={`/admin/edit/${product.id}`} className="text-[10px] bg-neutral-200 hover:bg-neutral-300 text-neutral-700 font-semibold px-2 py-1.5 rounded-lg transition-all">
-                                  Editar
-                                </Link>
                               </div>
                             </div>
                           );
@@ -347,6 +274,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   const stockNum = Number(product.stock) || 0;
                   const isSold = product.status === 'SOLD' || stockNum === 0;
                   const isReserved = product.status === 'RESERVED';
+                  const needsToBeAvailable = isSold || isReserved;
 
                   return (
                     <div key={product.id} className="bg-white border border-neutral-200/80 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
@@ -394,20 +322,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                         <form action={async () => {
                           'use server';
-                          if (stockNum > 1) {
-                            await registerSaleAction(product.id);
-                          } else {
+                          if (needsToBeAvailable) {
                             await toggleProductStatusAction(product.id, product.status || 'AVAILABLE');
+                          } else {
+                            // CORRIGIDO: Agora chama registerSaleAction para fazer a baixa gradativa do estoque
+                            await registerSaleAction(product.id);
                           }
                         }}>
                           <button
                             type="submit"
-                            className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all cursor-pointer ${isSold
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                              }`}
+                            className={`text-xs font-semibold px-4 py-2 rounded-lg transition-all cursor-pointer ${
+                              needsToBeAvailable
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                            }`}
                           >
-                            {isSold ? 'Marcar Disponível' : 'Marcar Vendido'}
+                            {needsToBeAvailable ? 'Marcar Disponível' : 'Marcar Vendido'}
                           </button>
                         </form>
 
@@ -418,17 +348,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           Editar
                         </Link>
 
-                        <form action={async () => {
-                          'use server';
-                          await deleteProductAction(product.id);
-                        }}>
-                          <button
-                            type="submit"
-                            className="text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg transition-all cursor-pointer"
-                          >
-                            Excluir
-                          </button>
-                        </form>
+                        {/* Botão de Exclusão Blindado com Confirmação */}
+                        <DeleteButton productId={product.id} deleteAction={deleteProductAction} />
                       </div>
                     </div>
                   );

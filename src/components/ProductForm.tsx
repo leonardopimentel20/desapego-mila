@@ -69,44 +69,126 @@ const subcategoriesMap: Record<string, { id: string; label: string }[]> = {
   ]
 };
 
+interface ImageItem {
+  preview: string;
+  base64: string;
+}
+
 export function ProductForm({ action }: ProductFormProps) {
   const [selectedCategory, setSelectedCategory] = useState("roupas");
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedImages, setSelectedImages] = useState<ImageItem[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const currentSubcategories = subcategoriesMap[selectedCategory] || subcategoriesMap["roupas"];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setSelectedFiles(prev => [...prev, ...newFiles]);
-    }
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
   };
 
-  const removeFile = (indexToRemove: number) => {
-    setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const newItems: ImageItem[] = [];
+
+      for (const file of files) {
+        try {
+          const base64 = await convertFileToBase64(file);
+          const preview = URL.createObjectURL(file);
+          newItems.push({ preview, base64 });
+        } catch (err) {
+          console.error("Erro ao ler arquivo", err);
+        }
+      }
+
+      setSelectedImages(prev => [...prev, ...newItems]);
+    }
+    e.target.value = '';
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formElement = e.currentTarget;
-    const formData = new FormData(formElement);
+    setErrorMessage(null);
+    setIsSubmitting(true);
 
-    // Substitui os arquivos do input nativo pelos arquivos filtrados no state
-    formData.delete("images");
-    selectedFiles.forEach(file => {
-      formData.append("images", file);
-    });
+    try {
+      const formElement = e.currentTarget;
+      const formData = new FormData(formElement);
 
-    await action(formData);
+      const rawPrice = String(formData.get("price") || "").trim();
+      const cleanPrice = rawPrice.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+      if (cleanPrice) {
+        formData.set("price", cleanPrice);
+      }
+
+      // Envia as imagens convertidas em Base64 de forma segura
+      formData.delete("images");
+      selectedImages.forEach((img) => {
+        formData.append("imagesBase64", img.base64);
+      });
+
+      await action(formData);
+    } catch (error: any) {
+      // CORREÇÃO CRUCIAL: Se o erro for o redirecionamento interno do Next.js, ignore-o (pois deu tudo certo!)
+      if (
+        error?.message === "NEXT_REDIRECT" ||
+        error?.digest?.includes("NEXT_REDIRECT") ||
+        error?.message?.includes("NEXT_REDIRECT")
+      ) {
+        return;
+      }
+
+      let message = error?.message || "Ocorreu um erro ao cadastrar a peça.";
+
+      if (message.includes("Unexpected end of form") || message.includes("exceeded") || message.includes("body")) {
+        message = "O tamanho total das fotos enviadas ultrapassou o limite ou a conexão foi interrompida. Tente enviar fotos com menor resolução.";
+      }
+
+      setErrorMessage(message);
+      setIsSubmitting(false);
+    }
   };
-
   return (
     <div className="bg-white border border-neutral-200/80 rounded-3xl p-6 md:p-8 shadow-xs">
       <h2 className="text-lg font-bold text-neutral-900 mb-4">✨ Cadastrar Novo Garimpo</h2>
+
+      {errorMessage && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-xs font-semibold flex items-start gap-3 shadow-xs">
+          <span className="text-base">⚠️</span>
+          <div className="flex-1">
+            <span className="font-bold block mb-0.5">Atenção ao preenchimento:</span>
+            {errorMessage}
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="text-red-400 hover:text-red-700 font-bold text-sm cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-neutral-700 mb-1 uppercase">Título da Peça *</label>
-            <input type="text" name="title" required placeholder="Ex: Vestido Midi Vintage" className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none" />
+            <input
+              type="text"
+              name="title"
+              placeholder="Ex: Vestido Midi Vintage"
+              required
+              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none"
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-neutral-700 mb-1 uppercase">Tamanho / Numeração *</label>
@@ -149,8 +231,8 @@ export function ProductForm({ action }: ProductFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-neutral-700 mb-1 uppercase">Categoria / Setor *</label>
-            <select 
-              name="categoryId" 
+            <select
+              name="categoryId"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none"
@@ -195,64 +277,81 @@ export function ProductForm({ action }: ProductFormProps) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-neutral-700 mb-1 uppercase">Estoque (Qtd) *</label>
-            <input type="number" name="stock" defaultValue={1} min={1} required className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none" />
+            <input
+              type="number"
+              name="stock"
+              defaultValue={1}
+              min={0}
+              required
+              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none"
+            />
           </div>
         </div>
 
-        {/* Seção de Fotos com Preview e Exclusão */}
+        {/* Seção de Fotos Moderna com Pré-visualização e Botão X */}
         <div className="space-y-3 pt-2">
-          <label className="block text-xs font-semibold text-neutral-700 uppercase">Fotos da Peça (Múltiplas)</label>
-          
-          <div className="flex items-center gap-3">
-            <label className="bg-pink-50 hover:bg-pink-100 text-pink-600 border border-pink-200 text-xs font-bold px-4 py-2.5 rounded-xl cursor-pointer transition-all inline-flex items-center gap-2">
-              <span>📷 Escolher Fotos</span>
-              <input 
-                type="file" 
-                accept="image/*" 
-                multiple 
-                onChange={handleFileChange} 
-                className="hidden" 
-              />
-            </label>
-            <span className="text-xs text-neutral-400">
-              {selectedFiles.length === 0 ? "Nenhuma foto selecionada" : `${selectedFiles.length} foto(s) selecionada(s)`}
-            </span>
-          </div>
+          <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider">Fotos da Peça (Múltiplas)</label>
 
-          {selectedFiles.length > 0 && (
+          <label className="border-2 border-dashed border-pink-200 hover:border-pink-400 bg-pink-50/40 hover:bg-pink-50 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group">
+            <div className="w-10 h-10 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center text-base group-hover:scale-110 transition-transform shadow-xs">
+              📷
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-bold text-pink-700">Clique para selecionar as fotos da peça</p>
+              <p className="text-[10px] text-neutral-400 mt-0.5">
+                {selectedImages.length === 0 ? "Nenhuma foto selecionada" : `${selectedImages.length} foto(s) pronta(s) para envio`}
+              </p>
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
+
+          {/* Grid de Pré-visualização */}
+          {selectedImages.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-2">
-              {selectedFiles.map((file, index) => {
-                const previewUrl = URL.createObjectURL(file);
-                return (
-                  <div key={index} className="relative group w-24 h-24 bg-neutral-100 rounded-xl overflow-hidden border border-neutral-200 shadow-xs">
-                    <img src={previewUrl} alt={`Preview ${index}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-md transition-colors cursor-pointer"
-                      title="Excluir foto"
-                    >
-                      ✕
-                    </button>
-                    {index === 0 && (
-                      <span className="absolute bottom-1 left-1 bg-neutral-900/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                        Capa
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {selectedImages.map((img, index) => (
+                <div key={index} className="relative group w-24 h-24 bg-neutral-100 rounded-2xl overflow-hidden border border-neutral-200 shadow-xs">
+                  <img src={img.preview} alt={`Preview ${index}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-md transition-colors cursor-pointer"
+                    title="Remover foto"
+                  >
+                    ✕
+                  </button>
+                  {index === 0 && (
+                    <span className="absolute bottom-1 left-1 bg-neutral-900/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      Capa
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         <div>
           <label className="block text-xs font-semibold text-neutral-700 mb-1 uppercase">Descrição</label>
-          <textarea name="description" rows={3} placeholder="Detalhes da peça, tamanho, estado de conservação..." className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none resize-none"></textarea>
+          <textarea
+            name="description"
+            rows={3}
+            placeholder="Detalhes da peça, tamanho, estado de conservação..."
+            className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm text-neutral-900 focus:border-pink-600 outline-none resize-none"
+          ></textarea>
         </div>
 
-        <button type="submit" className="w-full bg-pink-600 hover:bg-pink-500 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md shadow-pink-600/20 cursor-pointer">
-          Cadastrar Peça na Vitrine
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full bg-pink-600 hover:bg-pink-500 disabled:bg-pink-300 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md shadow-pink-600/20 cursor-pointer"
+        >
+          {isSubmitting ? "Cadastrando garimpo..." : "Cadastrar Peça na Vitrine"}
         </button>
       </form>
     </div>
