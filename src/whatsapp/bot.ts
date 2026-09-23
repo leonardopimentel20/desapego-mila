@@ -368,6 +368,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
 
     if (connection === "close") {
       whatsappSocketActive = false;
+      reconnecting = false;
       qrGeneration += 1;
       await saveQrCode(null);
       const statusCode = getDisconnectStatus(lastDisconnect?.error);
@@ -385,12 +386,16 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         console.error(
           "O WhatsApp rejeitou o handshake (405). Atualize o Baileys e tente novamente mais tarde.",
         );
-      } else if (!loggedOut && !reconnecting && reconnectAttempts < 5) {
+      } else if (!loggedOut && reconnectAttempts < 5) {
         void getWhatsAppControl().then((control) => {
           if (!control.enabled || control.disconnect_requested) return;
           reconnecting = true;
           reconnectAttempts += 1;
-          console.log("Tentando reconectar o WhatsApp...");
+          console.log(
+            statusCode === 515
+              ? "O WhatsApp solicitou reinício da sessão. Gerando um novo QR Code..."
+              : "Tentando reconectar o WhatsApp...",
+          );
           setTimeout(() => {
             void startWhatsAppBot().catch((error: unknown) => {
               reconnecting = false;
