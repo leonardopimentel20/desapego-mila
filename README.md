@@ -155,6 +155,11 @@ O projeto inclui um bot separado usando `@whiskeysockets/baileys`. Ele mantém a
 - `3`: orientação para vender peças;
 - `4`: encaminhamento para atendimento manual.
 
+Depois de escolher `2` ou `3`, a próxima mensagem é recebida como os dados da reserva
+ou da peça para venda. Esse estado fica associado ao número por 30 minutos; a pessoa pode
+digitar `menu` a qualquer momento para voltar ao início. O bot não usa treinamento de IA:
+o fluxo é determinístico e não cria a reserva automaticamente no banco.
+
 Para iniciar localmente:
 
 ```bash
@@ -163,7 +168,9 @@ npm run whatsapp
 
 Na primeira execução, abra o WhatsApp no celular em **Configurações → Dispositivos conectados → Conectar dispositivo** e escaneie o QR Code exibido no terminal. Nas próximas reinicializações, a sessão será carregada da pasta configurada em `WHATSAPP_AUTH_FOLDER`.
 
-O health check do serviço fica em [http://localhost:3001/health](http://localhost:3001/health). Mensagens de grupos, status e mensagens enviadas pelo próprio bot são ignoradas.
+O health check do serviço fica em [http://localhost:3001/health](http://localhost:3001/health). Mensagens de grupos, status e mensagens enviadas pelo próprio bot são ignoradas. Em produção, defina
+`NEXT_PUBLIC_APP_URL` com a URL pública da vitrine; sem essa variável, o bot usa
+`https://desapego-mila-production.up.railway.app` como padrão.
 
 ### Hospedagem do bot
 
