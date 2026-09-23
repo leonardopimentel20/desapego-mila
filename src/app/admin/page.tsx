@@ -1,7 +1,7 @@
 import { db } from "../../db";
-import { products } from "../../db/schema";
+import { products, reservations, reservationItems } from "../../db/schema";
 import { eq, desc, like, sql, sum, count, and } from "drizzle-orm";
-import { deleteProductAction, registerSaleAction, setProductStatusAction, createProductAction } from "./actions";
+import { deleteProductAction, registerSaleAction, setProductStatusAction, createProductAction, confirmReservationAction, cancelReservationAction, removeReservationItemAction } from "./actions";
 import { SearchBox } from "../../components/SearchBox";
 import { SuccessBanner } from "../../components/SuccessBanner";
 import { ProductForm } from "../../components/ProductForm";
@@ -67,27 +67,59 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(products.id)); 
 
-  // Lógica para agrupar produtos por cliente quando estiver na aba de Reservados
-  type AdminProduct = (typeof productList)[number];
-  const reservedGroups = status === 'RESERVED' ? productList.reduce((acc, product) => {
-    const clientKey = product.customerName && product.customerPhone 
-      ? `${product.customerName}_${product.customerPhone}` 
-      : 'cliente_geral';
+  const reservationRows = await db.select({
+    reservationId: reservations.id,
+    reservationStatus: reservations.status,
+    customerName: reservations.customerName,
+    customerPhone: reservations.customerPhone,
+    reservationUpdatedAt: reservations.updatedAt,
+    itemId: reservationItems.id,
+    productId: reservationItems.productId,
+    quantity: reservationItems.quantity,
+    title: products.title,
+    price: products.price,
+    size: products.size,
+    imageUrl: sql<string>`(SELECT url FROM product_images WHERE product_images.product_id = products.id ORDER BY is_main DESC, id ASC LIMIT 1)`,
+  }).from(reservations)
+    .innerJoin(reservationItems, eq(reservationItems.reservationId, reservations.id))
+    .innerJoin(products, eq(products.id, reservationItems.productId))
+    .where(eq(reservations.status, "PENDING"));
+  const confirmedReservationRows = await db.select({
+    reservationId: reservations.id,
+    reservationStatus: reservations.status,
+    customerName: reservations.customerName,
+    customerPhone: reservations.customerPhone,
+    reservationUpdatedAt: reservations.updatedAt,
+    itemId: reservationItems.id,
+    productId: reservationItems.productId,
+    quantity: reservationItems.quantity,
+    title: products.title,
+    price: products.price,
+    size: products.size,
+    imageUrl: sql<string>`(SELECT url FROM product_images WHERE product_images.product_id = products.id ORDER BY is_main DESC, id ASC LIMIT 1)`,
+  }).from(reservations)
+    .innerJoin(reservationItems, eq(reservationItems.reservationId, reservations.id))
+    .innerJoin(products, eq(products.id, reservationItems.productId))
+    .where(eq(reservations.status, "CONFIRMED"));
+  const reservationData = [...reservationRows, ...confirmedReservationRows];
 
-    if (!acc[clientKey]) {
-      acc[clientKey] = {
-        customerName: product.customerName || 'Cliente do WhatsApp',
-        customerPhone: product.customerPhone || 'Não informado',
-        updatedAt: product.updatedAt,
+  // Agrupa itens pela reserva persistida (e não apenas pelo nome do cliente).
+  const reservedGroups = status === 'RESERVED' ? reservationData.reduce((acc, item) => {
+    if (!acc[item.reservationId]) {
+      acc[item.reservationId] = {
+        reservationId: item.reservationId,
+        reservationStatus: item.reservationStatus,
+        customerName: item.customerName,
+        customerPhone: item.customerPhone,
+        updatedAt: item.reservationUpdatedAt,
         products: [],
-        totalValue: 0
+        totalValue: 0,
       };
     }
-    
-    acc[clientKey].products.push(product);
-    acc[clientKey].totalValue += Number(product.price) * Math.max(product.reservedQuantity, 1);
+    acc[item.reservationId].products.push(item);
+    acc[item.reservationId].totalValue += Number(item.price) * item.quantity;
     return acc;
-  }, {} as Record<string, { customerName: string; customerPhone: string; updatedAt: Date | null; products: AdminProduct[]; totalValue: number }>) : null;
+  }, {} as Record<string, { reservationId: string; reservationStatus: string; customerName: string; customerPhone: string; updatedAt: Date | null; products: typeof reservationData; totalValue: number }>) : null;
 
   return (
     <main className="min-h-screen bg-[#F9F8F6] text-neutral-900 font-sans p-4 md:p-8">
@@ -189,8 +221,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs bg-amber-500 text-white font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-                            Reserva ⏳
+                            {group.reservationStatus === "CONFIRMED" ? "Reserva confirmada" : "Reserva pendente"}
                           </span>
+                          <span className="text-[10px] text-neutral-500">#{group.reservationId}</span>
                           <h3 className="font-bold text-neutral-900 text-sm">👤 {group.customerName}</h3>
                         </div>
                         <p className="text-xs text-neutral-500 mt-1">
@@ -210,9 +243,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Garimpos solicitados ({group.products.length}):</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {group.products.map((product) => {
-                          const reservedQuantity = Math.max(product.reservedQuantity, 1);
+                          const reservedQuantity = product.quantity;
                           return (
-                            <div key={product.id} className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-3 flex items-center justify-between gap-3">
+                            <div key={product.itemId} className="bg-neutral-50 border border-neutral-200/80 rounded-xl p-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 bg-neutral-200 rounded-lg overflow-hidden flex-shrink-0">
                                   {product.imageUrl ? (
@@ -235,19 +268,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <form action={async () => {
                                   'use server';
-                                    await setProductStatusAction(product.id, 'AVAILABLE');
+                                  await removeReservationItemAction(product.itemId);
                                 }}>
-                                  <button type="submit" className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer" title="Devolve a peça para disponível">
-                                    Liberar
-                                  </button>
-                                </form>
-                                <form action={async () => {
-                                  'use server';
-                                  // Chama a venda gradativa para decrementar o estoque corretamente
-                                  await registerSaleAction(product.id);
-                                }}>
-                                  <button type="submit" className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer">
-                                    Vender {reservedQuantity} {reservedQuantity === 1 ? 'unidade' : 'unidades'}
+                                  <button type="submit" className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 font-bold px-2 py-1.5 rounded-lg transition-all cursor-pointer">
+                                    Remover item
                                   </button>
                                 </form>
                               </div>
@@ -255,6 +279,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           );
                         })}
                       </div>
+                    </div>
+                    <div className="flex justify-end gap-2 border-t border-amber-100 pt-3">
+                      {group.reservationStatus === "PENDING" && (
+                        <form action={async () => { 'use server'; await confirmReservationAction(group.reservationId); }}>
+                          <button type="submit" className="text-xs bg-emerald-600 text-white font-bold px-3 py-2 rounded-lg">Confirmar reserva</button>
+                        </form>
+                      )}
+                      <form action={async () => { 'use server'; await cancelReservationAction(group.reservationId); }}>
+                        <button type="submit" className="text-xs bg-rose-50 text-rose-700 border border-rose-200 font-bold px-3 py-2 rounded-lg">Cancelar reserva</button>
+                      </form>
                     </div>
                   </div>
                 ))

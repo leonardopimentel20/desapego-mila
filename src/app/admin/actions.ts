@@ -3,7 +3,7 @@
 import { db } from "../../db";
 import { redirect } from "next/navigation";
 import { eq, and, inArray } from "drizzle-orm";
-import { products, productImages } from "../../db/schema";
+import { products, productImages, reservations, reservationItems } from "../../db/schema";
 import { productSchema } from "../../db/validator";
 import { v2 as cloudinary } from "cloudinary";
 import { randomUUID } from "crypto";
@@ -344,6 +344,7 @@ export async function reserveProductsAction(
     throw new Error("A sacola contém itens duplicados. Atualize a página e tente novamente.");
   }
   const quantitiesById = new Map(validItems.map((item) => [item.productId, item.quantity]));
+  const reservationId = randomUUID();
 
   await db.transaction(async (tx) => {
     const selectedProducts = await tx.select({
@@ -362,6 +363,19 @@ export async function reserveProductsAction(
       throw new Error("Um ou mais itens não possuem a quantidade solicitada. Atualize a vitrine e tente novamente.");
     }
 
+    await tx.insert(reservations).values({
+      id: reservationId,
+      status: "PENDING",
+      customerName: name,
+      customerPhone: phone,
+    });
+    await tx.insert(reservationItems).values(validItems.map((item) => ({
+      id: randomUUID(),
+      reservationId,
+      productId: item.productId,
+      quantity: item.quantity,
+    })));
+
     for (const item of validItems) {
       await tx.update(products)
         .set({
@@ -375,6 +389,92 @@ export async function reserveProductsAction(
     }
   });
 
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+export async function confirmReservationAction(reservationId: string): Promise<void> {
+  await requireAdminSession();
+  const validReservationId = parseId(reservationId);
+  await db.transaction(async (tx) => {
+    const [reservation] = await tx.select({ status: reservations.status })
+      .from(reservations).where(eq(reservations.id, validReservationId)).for("update");
+    if (!reservation) throw new Error("Reserva não encontrada.");
+    if (reservation.status !== "PENDING") throw new Error("Somente reservas pendentes podem ser confirmadas.");
+    const items = await tx.select({ productId: reservationItems.productId })
+      .from(reservationItems).where(eq(reservationItems.reservationId, validReservationId));
+    if (items.length === 0) throw new Error("A reserva não possui itens.");
+    await tx.update(reservations).set({ status: "CONFIRMED", updatedAt: new Date() })
+      .where(eq(reservations.id, validReservationId));
+  });
+  revalidatePath("/admin");
+}
+
+export async function cancelReservationAction(reservationId: string): Promise<void> {
+  await requireAdminSession();
+  const validReservationId = parseId(reservationId);
+  await db.transaction(async (tx) => {
+    const [reservation] = await tx.select({ status: reservations.status })
+      .from(reservations).where(eq(reservations.id, validReservationId)).for("update");
+    if (!reservation) throw new Error("Reserva não encontrada.");
+    if (reservation.status === "CANCELLED") return;
+    const items = await tx.select({ productId: reservationItems.productId })
+      .from(reservationItems).where(eq(reservationItems.reservationId, validReservationId));
+    for (const item of items) {
+      const [product] = await tx.select({ status: products.status }).from(products)
+        .where(eq(products.id, item.productId)).for("update");
+      if (product?.status === "RESERVED") {
+        await tx.update(products).set({
+          status: "AVAILABLE",
+          reservedQuantity: 0,
+          customerName: null,
+          customerPhone: null,
+          updatedAt: new Date(),
+        }).where(eq(products.id, item.productId));
+      }
+    }
+    await tx.update(reservations).set({ status: "CANCELLED", updatedAt: new Date() })
+      .where(eq(reservations.id, validReservationId));
+  });
+  revalidatePath("/");
+  revalidatePath("/admin");
+}
+
+export async function removeReservationItemAction(reservationItemId: string): Promise<void> {
+  await requireAdminSession();
+  const validItemId = parseId(reservationItemId);
+  await db.transaction(async (tx) => {
+    const [item] = await tx.select({
+      id: reservationItems.id,
+      reservationId: reservationItems.reservationId,
+      productId: reservationItems.productId,
+      status: reservations.status,
+    }).from(reservationItems)
+      .innerJoin(reservations, eq(reservations.id, reservationItems.reservationId))
+      .where(eq(reservationItems.id, validItemId)).for("update");
+    if (!item) throw new Error("Item da reserva não encontrado.");
+    if (item.status !== "PENDING" && item.status !== "CONFIRMED") {
+      throw new Error("Somente itens de reservas ativas podem ser removidos.");
+    }
+    const [product] = await tx.select({ status: products.status }).from(products)
+      .where(eq(products.id, item.productId)).for("update");
+    if (product?.status === "RESERVED") {
+      await tx.update(products).set({
+        status: "AVAILABLE",
+        reservedQuantity: 0,
+        customerName: null,
+        customerPhone: null,
+        updatedAt: new Date(),
+      }).where(eq(products.id, item.productId));
+    }
+    const remaining = await tx.select({ id: reservationItems.id }).from(reservationItems)
+      .where(eq(reservationItems.reservationId, item.reservationId));
+    await tx.delete(reservationItems).where(eq(reservationItems.id, validItemId));
+    if (remaining.length <= 1) {
+      await tx.update(reservations).set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(eq(reservations.id, item.reservationId));
+    }
+  });
   revalidatePath("/");
   revalidatePath("/admin");
 }

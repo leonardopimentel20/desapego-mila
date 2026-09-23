@@ -26,3 +26,19 @@ export const productImages = mysqlTable('product_images', {
   isMain: int('is_main').notNull().default(0),
   productId: varchar('product_id', { length: 36 }).notNull(),
 });
+
+export const reservations = mysqlTable('reservations', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  status: varchar('status', { length: 20 }).notNull().default('PENDING'),
+  customerName: varchar('customer_name', { length: 255 }).notNull(),
+  customerPhone: varchar('customer_phone', { length: 50 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const reservationItems = mysqlTable('reservation_items', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  reservationId: varchar('reservation_id', { length: 36 }).notNull(),
+  productId: varchar('product_id', { length: 36 }).notNull(),
+  quantity: int('quantity').notNull(),
+});

@@ -129,10 +129,11 @@ Instale as dependências e inicie o servidor:
 ```bash
 npm install
 npm run db:migrate:reservation
+npm run db:migrate:reservations
 npm run dev
 ```
 
-A migração `db:migrate:reservation` adiciona, de forma idempotente, a coluna `reserved_quantity` usada para registrar quantas unidades cada cliente reservou. Execute-a uma vez em cada banco antes de publicar esta versão.
+As migrações são idempotentes. `db:migrate:reservation` adiciona a coluna `reserved_quantity`; `db:migrate:reservations` cria as tabelas de reservas e itens. Execute ambas uma vez em cada banco antes de publicar esta versão.
 
 A aplicação ficará disponível em [http://localhost:3000](http://localhost:3000). O painel está em [http://localhost:3000/admin](http://localhost:3000/admin).
 
@@ -154,9 +155,58 @@ Antes de publicar:
 1. configure todas as variáveis de ambiente na plataforma de hospedagem;
 2. use uma senha administrativa forte e um segredo de sessão longo e aleatório;
 3. confirme a conectividade com MySQL e Cloudinary;
-4. execute `npm run db:migrate:reservation` no banco da aplicação;
+4. execute `npm run db:migrate:reservation` e `npm run db:migrate:reservations` no banco da aplicação;
 5. execute `npm run typecheck`, `npm run lint`, `npm test` e `npm run build`;
 6. inicie o build gerado com `npm start` quando a hospedagem não gerenciar o Next.js automaticamente.
+
+### Deploy no Railway
+
+O projeto pode ser publicado diretamente a partir do repositório GitHub:
+
+1. crie um novo projeto no Railway e selecione **Deploy from GitHub repo**;
+2. selecione este repositório e mantenha o build padrão baseado no `package.json`;
+3. configure as variáveis de ambiente da seção anterior no serviço web;
+4. configure o domínio público em **Settings > Networking > Generate Domain**;
+5. defina `/api/health` como health check, se essa opção estiver disponível no plano;
+6. execute a migração do banco uma vez antes de liberar o painel administrativo:
+
+```bash
+npm run db:migrate:reservation
+npm run db:migrate:reservations
+```
+
+O script `npm start` não fixa a porta: o Railway fornece a variável `PORT` automaticamente.
+O endpoint `/api/health` retorna `{ "status": "ok" }` para verificar se o processo está respondendo.
+
+O MySQL pode ser um serviço provisionado no Railway ou um banco externo. Em ambos os casos,
+copie a URL completa para `DATABASE_URL` e confirme que o banco permite conexões a partir do Railway.
+
+### WhatsApp: situação atual e próximos passos
+
+Hoje o checkout registra a reserva no banco e abre uma conversa com uma mensagem preenchida
+por meio de um link `wa.me`. Isso não exige API, token ou aprovação da Meta e é a melhor opção
+para começar com baixo custo: a Mila confirma o atendimento manualmente no WhatsApp.
+
+Se a necessidade for um **chat automatizado** (respostas, status da reserva, confirmação e
+notificações), a recomendação é usar a **WhatsApp Business Platform Cloud API da Meta**.
+Ela exige um Business Manager, um número dedicado, um token permanente e um endpoint HTTPS
+de webhook. Nesse cenário, o Railway hospeda as rotas da API e o webhook, enquanto o Cloudinary
+continua armazenando as imagens.
+
+Não é recomendado automatizar o WhatsApp Web com bibliotecas que controlam QR Code ou navegador:
+isso é frágil, pode desconectar e pode levar ao bloqueio do número. Provedores como Twilio ou
+360dialog simplificam a operação, mas adicionam custo e uma camada intermediária.
+
+Uma evolução segura do projeto seria:
+
+1. manter o link `wa.me` como fallback;
+2. criar uma rota `POST /api/whatsapp/webhook` para validar o desafio da Meta e receber eventos;
+3. criar um módulo de servidor para enviar mensagens pela Cloud API sem expor o token;
+4. enviar a confirmação da reserva somente depois da transação do banco;
+5. persistir o `message_id` e o status de entrega no banco.
+
+As credenciais da Meta devem ficar somente nas variáveis de ambiente do Railway, nunca no
+navegador ou no repositório.
 
 O endereço ngrok em `next.config.ts` existe para o ambiente atual de desenvolvimento. Antes de usar outro túnel, troque a origem explícita; não adicione curingas às origens permitidas das Server Actions em produção.
 
