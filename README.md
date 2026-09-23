@@ -36,6 +36,11 @@ src/
 │   └── validator.ts            # Regras Zod dos produtos
 ├── lib/admin-auth.ts           # Criação e validação da sessão administrativa
 └── proxy.ts                    # Proteção das rotas /admin no Next.js 16
+src/whatsapp/
+├── bot.ts                      # Conexão Baileys, QR, reconexão e mensagens
+├── config.ts                   # Pasta de sessão, porta e URL da vitrine
+├── menu.ts                     # Respostas automáticas do atendimento
+└── index.ts                    # Health check Express e inicialização do bot
 
 tests/                          # Testes Playwright da vitrine e autenticação
 drizzle.config.ts               # Configuração do Drizzle Kit
@@ -112,6 +117,10 @@ CLOUDINARY_API_KEY=chave_da_api
 CLOUDINARY_API_SECRET=segredo_da_api
 ADMIN_PASSWORD=senha_administrativa_forte
 ADMIN_SESSION_SECRET=segredo_longo_e_aleatorio
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+WHATSAPP_BOT_PORT=3001
+WHATSAPP_AUTH_FOLDER=./auth_info_baileys
+WHATSAPP_LOG_LEVEL=info
 ```
 
 Use valores diferentes entre desenvolvimento e produção. Alterar `ADMIN_PASSWORD` ou `ADMIN_SESSION_SECRET` invalida as sessões administrativas anteriores.
@@ -136,6 +145,31 @@ npm run dev
 As migrações são idempotentes. `db:migrate:reservation` adiciona a coluna `reserved_quantity`; `db:migrate:reservations` cria as tabelas de reservas e itens. Execute ambas uma vez em cada banco antes de publicar esta versão.
 
 A aplicação ficará disponível em [http://localhost:3000](http://localhost:3000). O painel está em [http://localhost:3000/admin](http://localhost:3000/admin).
+
+## Bot de atendimento via WhatsApp
+
+O projeto inclui um bot separado usando `@whiskeysockets/baileys`. Ele mantém a sessão em `auth_info_baileys`, exibe o QR Code no terminal somente quando necessário e responde mensagens privadas com um menu básico:
+
+- `1`: link da vitrine;
+- `2`: orientação para fazer uma reserva;
+- `3`: orientação para vender peças;
+- `4`: encaminhamento para atendimento manual.
+
+Para iniciar localmente:
+
+```bash
+npm run whatsapp
+```
+
+Na primeira execução, abra o WhatsApp no celular em **Configurações → Dispositivos conectados → Conectar dispositivo** e escaneie o QR Code exibido no terminal. Nas próximas reinicializações, a sessão será carregada da pasta configurada em `WHATSAPP_AUTH_FOLDER`.
+
+O health check do serviço fica em [http://localhost:3001/health](http://localhost:3001/health). Mensagens de grupos, status e mensagens enviadas pelo próprio bot são ignoradas.
+
+### Hospedagem do bot
+
+O bot deve rodar como um serviço separado do Next.js, por exemplo com o comando `npm run whatsapp`. A pasta `auth_info_baileys` precisa estar em um volume persistente; sem isso, o QR Code será solicitado novamente após cada deploy. Não coloque essa pasta no Git nem em logs.
+
+Essa integração usa uma sessão do WhatsApp Web via Baileys, não a WhatsApp Cloud API oficial. Use um número dedicado, mantenha o bot com respostas moderadas e revise os termos e limites aplicáveis ao WhatsApp antes de usá-lo em produção.
 
 ## Verificações
 
