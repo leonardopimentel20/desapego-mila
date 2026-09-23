@@ -84,6 +84,22 @@ async function updateReservationDelivery(
 
   const connection = await mysql.createConnection(process.env.DATABASE_URL);
   try {
+    const [reservationRows] = await connection.execute(
+      "SELECT id, status FROM reservations WHERE id = ? LIMIT 1",
+      [reservationId],
+    );
+    const reservation = (reservationRows as Array<{ id: string; status: string }>)[0];
+
+    if (!reservation) {
+      throw new Error(
+        "Reserva não encontrada no banco conectado ao serviço do WhatsApp. Verifique se DATABASE_URL é a mesma do site.",
+      );
+    }
+
+    if (reservation.status !== "PENDING") {
+      throw new Error(`A reserva já foi finalizada e está com status ${reservation.status}.`);
+    }
+
     const [result] = await connection.execute(
       `UPDATE reservations
        SET delivery_method = ?, delivery_neighborhood = ?, delivery_fee = ?, updated_at = CURRENT_TIMESTAMP
@@ -91,8 +107,30 @@ async function updateReservationDelivery(
       [deliveryMethod, neighborhood, fee, reservationId],
     );
 
-    if (!("affectedRows" in result) || result.affectedRows !== 1) {
-      throw new Error("Reserva não encontrada ou já finalizada.");
+    if (!("affectedRows" in result)) {
+      throw new Error("O banco não retornou confirmação da atualização da reserva.");
+    }
+
+    const [updatedRows] = await connection.execute(
+      `SELECT delivery_method, delivery_neighborhood, delivery_fee
+       FROM reservations
+       WHERE id = ? AND status = 'PENDING'
+       LIMIT 1`,
+      [reservationId],
+    );
+    const updatedReservation = (updatedRows as Array<{
+      delivery_method: string | null;
+      delivery_neighborhood: string | null;
+      delivery_fee: string | number | null;
+    }>)[0];
+
+    if (
+      !updatedReservation
+      || updatedReservation.delivery_method !== deliveryMethod
+      || updatedReservation.delivery_neighborhood !== neighborhood
+      || Number(updatedReservation.delivery_fee || 0) !== fee
+    ) {
+      throw new Error("O banco não confirmou os dados de entrega da reserva.");
     }
   } finally {
     await connection.end();
@@ -374,8 +412,13 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       } catch (error) {
         console.error("Não foi possível responder à mensagem do WhatsApp:", error);
         const errorCode = (error as { code?: string } | null)?.code;
+        const errorMessage = error instanceof Error ? error.message : "";
         const responseText = errorCode === "ER_BAD_FIELD_ERROR"
           ? "Não consegui atualizar os dados de entrega porque o banco ainda está sendo atualizado. Reinicie o serviço do WhatsApp e tente novamente em alguns instantes."
+          : errorMessage.includes("DATABASE_URL")
+            ? "Não encontrei essa reserva no banco do WhatsApp. O serviço precisa usar a mesma DATABASE_URL do site. A Mila já poderá continuar o atendimento manualmente."
+            : errorMessage.includes("já foi finalizada")
+              ? "Essa reserva já foi finalizada no painel. A Mila continuará o atendimento manualmente por aqui."
           : "Tive um problema ao atualizar sua reserva. A Mila já poderá continuar o atendimento manualmente por aqui.";
 
         try {
