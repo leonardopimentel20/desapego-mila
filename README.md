@@ -160,6 +160,15 @@ ou da peça para venda. Esse estado fica associado ao número por 30 minutos; a 
 digitar `menu` a qualquer momento para voltar ao início. O bot não usa treinamento de IA:
 o fluxo é determinístico e não cria a reserva automaticamente no banco.
 
+Quando a reserva é iniciada pela sacola da vitrine, a mensagem enviada ao WhatsApp inclui
+um código único. O bot reconhece esse código, pergunta se a cliente prefere retirada ou
+motoboy e registra a escolha na mesma reserva. Para motoboy, ele solicita bairro e cidade
+apenas para registro e aplica a taxa fixa de R$ 30,00 para a cidade inteira.
+
+O serviço do bot precisa ter a mesma variável `DATABASE_URL` do serviço web para consultar
+e atualizar as reservas. As migrações de entrega são executadas pelo `npm start`:
+`db:migrate:delivery`.
+
 Para iniciar localmente:
 
 ```bash

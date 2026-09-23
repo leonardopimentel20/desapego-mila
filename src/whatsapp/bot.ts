@@ -8,6 +8,7 @@ import makeWASocket, {
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { Boom } from "@hapi/boom";
+import mysql from "mysql2/promise";
 import { whatsappConfig } from "./config.js";
 import { getAutomaticReply, type ConversationState } from "./menu.js";
 
@@ -15,8 +16,53 @@ const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 
 let reconnecting = false;
 let reconnectAttempts = 0;
-const conversationStates = new Map<string, { state: ConversationState; expiresAt: number }>();
+type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation";
+const conversationStates = new Map<string, {
+  state: BotState;
+  expiresAt: number;
+  reservationId?: string;
+}>();
 const conversationStateTtlMs = 30 * 60 * 1000;
+const reservationCodePattern = /Código da reserva:\s*([0-9a-f-]{36})/i;
+const deliveryFee = 30;
+
+async function updateReservationDelivery(
+  reservationId: string,
+  deliveryMethod: "pickup" | "motoboy",
+  neighborhood: string | null,
+  fee: number,
+) {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  }
+
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    const [result] = await connection.execute(
+      `UPDATE reservations
+       SET delivery_method = ?, delivery_neighborhood = ?, delivery_fee = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'PENDING'`,
+      [deliveryMethod, neighborhood, fee, reservationId],
+    );
+
+    if (!("affectedRows" in result) || result.affectedRows !== 1) {
+      throw new Error("Reserva não encontrada ou já finalizada.");
+    }
+  } finally {
+    await connection.end();
+  }
+}
+
+function getDeliveryChoiceReply() {
+  return [
+    "Como você prefere receber sua reserva? 😊",
+    "",
+    "1️⃣ Retirar com a Mila",
+    "2️⃣ Receber por motoboy",
+    "",
+    "Responda com 1 ou 2.",
+  ].join("\n");
+}
 
 function getDisconnectStatus(error: unknown) {
   return error instanceof Boom
@@ -100,7 +146,81 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         const state = currentState && currentState.expiresAt > Date.now()
           ? currentState.state
           : "menu";
-        const reply = getAutomaticReply(text, whatsappConfig.storeUrl, state);
+        const reservationMatch = reservationCodePattern.exec(text);
+
+        if (reservationMatch) {
+          const reservationId = reservationMatch[1];
+          conversationStates.set(message.key.remoteJid, {
+            state: "delivery-choice",
+            reservationId,
+            expiresAt: Date.now() + conversationStateTtlMs,
+          });
+          await socket.sendMessage(message.key.remoteJid, {
+            text: `✅ Recebi sua reserva (${reservationId.slice(0, 8)}...).\n\n${getDeliveryChoiceReply()}`,
+          });
+          continue;
+        }
+
+        if (state === "delivery-choice" && currentState?.reservationId) {
+          if (/^(1|retirada|retirar|buscar|vou buscar)$/.test(normalizeForBot(text))) {
+            await updateReservationDelivery(currentState.reservationId, "pickup", null, 0);
+            conversationStates.delete(message.key.remoteJid);
+            await socket.sendMessage(message.key.remoteJid, {
+              text: "Perfeito 😊 Registrei que você fará a retirada com a Mila. Ela confirmará os detalhes do pagamento e do horário por aqui.",
+            });
+            continue;
+          }
+
+          if (/^(2|motoboy|entrega|entregar|delivery)$/.test(normalizeForBot(text))) {
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState,
+              state: "delivery-neighborhood",
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
+            await socket.sendMessage(message.key.remoteJid, {
+              text: "Combinado! A entrega por motoboy tem taxa fixa de R$ 30,00 para a cidade inteira. Qual é o seu bairro e cidade?",
+            });
+            continue;
+          }
+
+          await socket.sendMessage(message.key.remoteJid, { text: getDeliveryChoiceReply() });
+          continue;
+        }
+
+        if (state === "delivery-neighborhood" && currentState?.reservationId) {
+          const neighborhood = text.trim();
+          await updateReservationDelivery(currentState.reservationId, "motoboy", neighborhood, deliveryFee);
+          conversationStates.set(message.key.remoteJid, {
+            ...currentState,
+            state: "delivery-confirmation",
+            expiresAt: Date.now() + conversationStateTtlMs,
+          });
+          await socket.sendMessage(message.key.remoteJid, {
+            text: `📍 Anotei: ${neighborhood}\n🚴 Taxa fixa de entrega: R$ 30,00\n\nA Mila vai confirmar a disponibilidade e o total final da reserva. Está correto?\n1️⃣ Sim\n2️⃣ Corrigir bairro`,
+          });
+          continue;
+        }
+
+        if (state === "delivery-confirmation" && currentState?.reservationId) {
+          if (/^(1|sim|correto|confirmo)$/.test(normalizeForBot(text))) {
+            conversationStates.delete(message.key.remoteJid);
+            await socket.sendMessage(message.key.remoteJid, {
+              text: "Perfeito 😊 Dados de entrega registrados. A Mila continuará o atendimento por aqui.",
+            });
+            continue;
+          }
+          if (/^(2|corrigir|trocar)$/.test(normalizeForBot(text))) {
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState,
+              state: "delivery-neighborhood",
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
+            await socket.sendMessage(message.key.remoteJid, { text: "Claro! Envie novamente seu bairro e cidade." });
+            continue;
+          }
+        }
+
+        const reply = getAutomaticReply(text, whatsappConfig.storeUrl, state === "menu" || state === "reservation" || state === "selling" ? state : "menu");
 
         conversationStates.set(message.key.remoteJid, {
           state: reply.nextState,
@@ -117,4 +237,8 @@ export async function startWhatsAppBot(): Promise<WASocket> {
   });
 
   return socket;
+}
+
+function normalizeForBot(text: string) {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 }

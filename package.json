@@ -8,13 +8,14 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "npm run db:migrate:initial && npm run db:migrate:reservation && npm run db:migrate:reservations && npm run db:migrate:sold-quantity && next start",
+    "start": "npm run db:migrate:initial && npm run db:migrate:reservation && npm run db:migrate:reservations && npm run db:migrate:delivery && npm run db:migrate:sold-quantity && next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
     "db:migrate:initial": "node scripts/migrate-initial-schema.mjs",
     "db:migrate:reservation": "node scripts/migrate-reserved-quantity.mjs",
     "db:migrate:reservations": "node scripts/migrate-reservations.mjs",
+    "db:migrate:delivery": "node scripts/migrate-delivery.mjs",
     "db:migrate:sold-quantity": "node scripts/migrate-sold-quantity.mjs",
     "whatsapp": "tsx src/whatsapp/index.ts"
   },

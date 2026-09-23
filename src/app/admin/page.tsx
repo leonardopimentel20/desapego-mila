@@ -74,6 +74,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     reservationStatus: reservations.status,
     customerName: reservations.customerName,
     customerPhone: reservations.customerPhone,
+    deliveryMethod: reservations.deliveryMethod,
+    deliveryNeighborhood: reservations.deliveryNeighborhood,
+    deliveryFee: reservations.deliveryFee,
     reservationCreatedAt: reservations.createdAt,
     reservationUpdatedAt: reservations.updatedAt,
     itemId: reservationItems.id,
@@ -106,6 +109,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         reservationStatus: item.reservationStatus,
         customerName: item.customerName,
         customerPhone: item.customerPhone,
+        deliveryMethod: item.deliveryMethod,
+        deliveryNeighborhood: item.deliveryNeighborhood,
+        deliveryFee: item.deliveryFee,
         createdAt: item.reservationCreatedAt,
         updatedAt: item.reservationUpdatedAt,
         products: [],
@@ -115,7 +121,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     acc[item.reservationId].products.push(item);
     acc[item.reservationId].totalValue += Number(item.price) * item.quantity;
     return acc;
-  }, {} as Record<string, { reservationId: string; reservationStatus: string; customerName: string; customerPhone: string; createdAt: Date | null; updatedAt: Date | null; products: typeof reservationData; totalValue: number }>) : null;
+  }, {} as Record<string, { reservationId: string; reservationStatus: string; customerName: string; customerPhone: string; deliveryMethod: string | null; deliveryNeighborhood: string | null; deliveryFee: string | null; createdAt: Date | null; updatedAt: Date | null; products: typeof reservationData; totalValue: number }>) : null;
 
   return (
     <main className="min-h-screen bg-[#F9F8F6] text-neutral-900 font-sans p-4 md:p-8">
@@ -302,6 +308,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             {group.createdAt ? new Date(group.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Data não registrada"}
                           </strong>
                         </p>
+                        {group.deliveryMethod && (
+                          <p className="mt-1 text-[11px] text-neutral-500">
+                            Recebimento: <strong className="text-neutral-800">
+                              {group.deliveryMethod === "motoboy" ? "Motoboy" : "Retirada com a Mila"}
+                              {group.deliveryNeighborhood ? ` • ${group.deliveryNeighborhood}` : ""}
+                              {group.deliveryFee ? ` • Taxa ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(group.deliveryFee))}` : ""}
+                            </strong>
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 sm:text-right">
                         <div>

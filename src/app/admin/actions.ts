@@ -349,7 +349,7 @@ export async function reserveProductsAction(
   items: Array<{ productId: string; quantity: number }>,
   customerName?: string,
   customerPhone?: string
-): Promise<void> {
+): Promise<string> {
   const validation = reservationSchema.safeParse({
     items,
     customerName,
@@ -417,6 +417,7 @@ export async function reserveProductsAction(
 
   revalidatePath("/");
   revalidatePath("/admin");
+  return reservationId;
 }
 
 export async function confirmReservationAction(reservationId: string): Promise<void> {

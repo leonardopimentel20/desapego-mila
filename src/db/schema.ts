@@ -33,6 +33,9 @@ export const reservations = mysqlTable('reservations', {
   status: varchar('status', { length: 20 }).notNull().default('PENDING'),
   customerName: varchar('customer_name', { length: 255 }).notNull(),
   customerPhone: varchar('customer_phone', { length: 50 }).notNull(),
+  deliveryMethod: varchar('delivery_method', { length: 20 }),
+  deliveryNeighborhood: varchar('delivery_neighborhood', { length: 120 }),
+  deliveryFee: decimal('delivery_fee', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });

@@ -25,9 +25,10 @@ export function CartDrawer() {
 
     setIsSubmitting(true);
     setErrorMessage('');
+    let reservationId = '';
     try {
       const items = cart.map((item) => ({ productId: item.id, quantity: item.quantity }));
-      await reserveProductsAction(items, customerName, customerPhone);
+      reservationId = await reserveProductsAction(items, customerName, customerPhone);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Não foi possível concluir a reserva. Tente novamente.");
       setIsSubmitting(false);
@@ -54,6 +55,7 @@ export function CartDrawer() {
 
     const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice);
     message += `💰 *Total da Sacola:* ${formattedTotal}\n\n`;
+    message += `Código da reserva: ${reservationId}\n\n`;
     message += "Como procedemos com o pagamento e envio?";
 
     const encodedMessage = encodeURIComponent(message);
