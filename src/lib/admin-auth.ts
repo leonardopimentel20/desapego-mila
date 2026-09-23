@@ -36,20 +36,28 @@ export function isValidAdminPassword(candidate: string) {
 }
 
 export async function requireAdminSession() {
-  const token = (await cookies()).get(ADMIN_SESSION_COOKIE)?.value;
   const expectedToken = createAdminSessionToken();
+  const token = (await cookies()).get(ADMIN_SESSION_COOKIE)?.value;
 
-  if (!token) {
+  if (!token || !hasMatchingSessionToken(token, expectedToken)) {
     throw new Error("Não autorizado.");
   }
+}
 
+function hasMatchingSessionToken(token: string, expectedToken: string) {
   const tokenBuffer = Buffer.from(token);
   const expectedBuffer = Buffer.from(expectedToken);
 
-  if (
-    tokenBuffer.length !== expectedBuffer.length ||
-    !timingSafeEqual(tokenBuffer, expectedBuffer)
-  ) {
-    throw new Error("Não autorizado.");
-  }
+  return (
+    tokenBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(tokenBuffer, expectedBuffer)
+  );
+}
+
+export async function hasAdminSession() {
+  const token = (await cookies()).get(ADMIN_SESSION_COOKIE)?.value;
+
+  if (!token) return false;
+
+  return hasMatchingSessionToken(token, createAdminSessionToken());
 }

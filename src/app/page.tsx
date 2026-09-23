@@ -3,6 +3,7 @@ import { SearchBox } from "../components/SearchBox";
 import { CartButton } from "../components/CartButton";
 import { CartDrawer } from "../components/CartDrawer";
 import Link from "next/link";
+import { hasAdminSession } from "../lib/admin-auth";
 
 interface HomeProps {
   searchParams: Promise<{
@@ -87,6 +88,7 @@ export default async function Home({ searchParams }: HomeProps) {
   } = resolvedSearchParams;
 
   const products = await getAvailableProducts(search, category, size, subcategory, gender, sort);
+  const isAdmin = await hasAdminSession();
 
   const categories = [
     { id: "todos", label: "Todos os Garimpos" },
@@ -145,6 +147,15 @@ export default async function Home({ searchParams }: HomeProps) {
               </Link>
             </div>
             <div className="flex items-center gap-2 md:hidden">
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  aria-label="Abrir painel administrativo"
+                  className="text-[11px] bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 px-3 py-2 rounded-full font-bold transition-all"
+                >
+                  Painel
+                </Link>
+              )}
               <a
                 href="https://wa.me/5547996473275?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
                 target="_blank"
@@ -162,6 +173,14 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-xs bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 px-4 py-2.5 rounded-full font-bold transition-all"
+              >
+                Painel administrativo
+              </Link>
+            )}
             <a
               href="https://wa.me/5547996473275?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
               target="_blank"
