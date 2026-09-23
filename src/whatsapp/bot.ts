@@ -16,7 +16,7 @@ const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 
 let reconnecting = false;
 let reconnectAttempts = 0;
-type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation";
+type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation" | "payment" | "payment-proof";
 const conversationStates = new Map<string, {
   state: BotState;
   expiresAt: number;
@@ -51,6 +51,61 @@ async function updateReservationDelivery(
   } finally {
     await connection.end();
   }
+}
+
+async function getReservationTotal(reservationId: string) {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  }
+
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    const [rows] = await connection.execute(
+      `SELECT COALESCE(SUM(p.price * ri.quantity), 0) AS subtotal,
+              COALESCE(r.delivery_fee, 0) AS delivery_fee
+       FROM reservations r
+       INNER JOIN reservation_items ri ON ri.reservation_id = r.id
+       INNER JOIN products p ON p.id = ri.product_id
+       WHERE r.id = ? AND r.status = 'PENDING'
+       GROUP BY r.id, r.delivery_fee`,
+      [reservationId],
+    );
+    const [summary] = rows as Array<{ subtotal: string | number; delivery_fee: string | number }>;
+    if (!summary) throw new Error("Reserva não encontrada ou já finalizada.");
+
+    return Number(summary.subtotal) + Number(summary.delivery_fee);
+  } finally {
+    await connection.end();
+  }
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+async function getPaymentReply(reservationId: string) {
+  const total = await getReservationTotal(reservationId);
+  if (!whatsappConfig.pixKey) {
+    return {
+      text: `✅ Entrega registrada. O total da sua reserva é ${formatCurrency(total)}.\n\nA Mila enviará a chave Pix por aqui para você concluir o pagamento.`,
+      total,
+    };
+  }
+
+  return {
+    text: [
+      `✅ Entrega registrada. O total da sua reserva é ${formatCurrency(total)}.`,
+      "",
+      "Para pagar via Pix:",
+      `• ${whatsappConfig.pixKeyType}: ${whatsappConfig.pixKey}`,
+      `• Nome: ${whatsappConfig.pixName}`,
+      whatsappConfig.pixCity ? `• Cidade: ${whatsappConfig.pixCity}` : "",
+      `• Valor: ${formatCurrency(total)}`,
+      "",
+      "Depois de realizar o pagamento, responda *1* e envie o comprovante. Se ainda não for pagar, responda *2*.",
+    ].filter(Boolean).join("\n"),
+    total,
+  };
 }
 
 function getDeliveryChoiceReply() {
@@ -134,10 +189,12 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       if (message.key.fromMe || !message.message || !message.key.remoteJid) continue;
       if (message.key.remoteJid.endsWith("@g.us") || message.key.remoteJid === "status@broadcast") continue;
 
+      const hasImage = Boolean(message.message.imageMessage);
       const text = message.message.conversation
         || message.message.extendedTextMessage?.text
         || message.message.imageMessage?.caption
-        || message.message.videoMessage?.caption;
+        || message.message.videoMessage?.caption
+        || (hasImage ? "[comprovante enviado]" : undefined);
 
       if (!text?.trim()) continue;
 
@@ -164,9 +221,14 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         if (state === "delivery-choice" && currentState?.reservationId) {
           if (/^(1|retirada|retirar|buscar|vou buscar)$/.test(normalizeForBot(text))) {
             await updateReservationDelivery(currentState.reservationId, "pickup", null, 0);
-            conversationStates.delete(message.key.remoteJid);
+            const paymentReply = await getPaymentReply(currentState.reservationId);
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState,
+              state: "payment",
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
             await socket.sendMessage(message.key.remoteJid, {
-              text: "Perfeito 😊 Registrei que você fará a retirada com a Mila. Ela confirmará os detalhes do pagamento e do horário por aqui.",
+              text: `Perfeito 😊 Registrei a retirada com a Mila.\n\n${paymentReply.text}`,
             });
             continue;
           }
@@ -196,16 +258,21 @@ export async function startWhatsAppBot(): Promise<WASocket> {
             expiresAt: Date.now() + conversationStateTtlMs,
           });
           await socket.sendMessage(message.key.remoteJid, {
-            text: `📍 Anotei: ${neighborhood}\n🚴 Taxa fixa de entrega: R$ 30,00\n\nA Mila vai confirmar a disponibilidade e o total final da reserva. Está correto?\n1️⃣ Sim\n2️⃣ Corrigir bairro`,
+            text: `📍 Anotei: ${neighborhood}\n🚴 Taxa fixa de entrega: R$ 30,00\n\nEstá correto?\n1️⃣ Sim\n2️⃣ Corrigir bairro`,
           });
           continue;
         }
 
         if (state === "delivery-confirmation" && currentState?.reservationId) {
           if (/^(1|sim|correto|confirmo)$/.test(normalizeForBot(text))) {
-            conversationStates.delete(message.key.remoteJid);
+            const paymentReply = await getPaymentReply(currentState.reservationId);
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState,
+              state: "payment",
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
             await socket.sendMessage(message.key.remoteJid, {
-              text: "Perfeito 😊 Dados de entrega registrados. A Mila continuará o atendimento por aqui.",
+              text: `Perfeito 😊 Dados de entrega registrados.\n\n${paymentReply.text}`,
             });
             continue;
           }
@@ -218,6 +285,40 @@ export async function startWhatsAppBot(): Promise<WASocket> {
             await socket.sendMessage(message.key.remoteJid, { text: "Claro! Envie novamente seu bairro e cidade." });
             continue;
           }
+        }
+
+        if (state === "payment" && currentState?.reservationId) {
+          if (/^(1|sim|paguei|pago|realizei)$/.test(normalizeForBot(text))) {
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState,
+              state: "payment-proof",
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
+            await socket.sendMessage(message.key.remoteJid, {
+              text: "Perfeito 😊 Agora envie o comprovante do Pix nesta conversa. A Mila vai conferir o pagamento antes de finalizar a venda.",
+            });
+            continue;
+          }
+
+          if (/^(2|ainda nao|nao|não)$/.test(normalizeForBot(text))) {
+            await socket.sendMessage(message.key.remoteJid, {
+              text: "Sem problema 😊 Quando fizer o Pix, responda *1* e envie o comprovante. A reserva continua aguardando confirmação da Mila.",
+            });
+            continue;
+          }
+
+          await socket.sendMessage(message.key.remoteJid, {
+            text: "Para continuar, responda *1* depois de pagar via Pix ou *2* se ainda não realizou o pagamento.",
+          });
+          continue;
+        }
+
+        if (state === "payment-proof" && currentState?.reservationId) {
+          conversationStates.delete(message.key.remoteJid);
+          await socket.sendMessage(message.key.remoteJid, {
+            text: "Comprovante recebido 😊 A Mila vai conferir o Pix e confirmar sua reserva. Assim que validar, ela continuará com você até finalizar a entrega ou retirada.",
+          });
+          continue;
         }
 
         const reply = getAutomaticReply(text, whatsappConfig.storeUrl, state === "menu" || state === "reservation" || state === "selling" ? state : "menu");

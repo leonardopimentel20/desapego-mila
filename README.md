@@ -169,6 +169,20 @@ O serviço do bot precisa ter a mesma variável `DATABASE_URL` do serviço web p
 e atualizar as reservas. As migrações de entrega são executadas pelo `npm start`:
 `db:migrate:delivery`.
 
+Para continuar o atendimento até o pagamento, configure no serviço do bot:
+
+```env
+PIX_KEY=sua-chave-pix
+PIX_KEY_TYPE=tipo-da-chave
+PIX_NAME=Desapego da Mila
+PIX_CITY=sua-cidade
+```
+
+Depois de registrar a retirada ou a entrega, o bot informa o total atualizado, envia a
+chave Pix, pede a confirmação do pagamento e aguarda o comprovante. O comprovante não
+confirma a venda automaticamente: a Mila ainda precisa validar o pagamento e confirmar a
+reserva no painel.
+
 Para iniciar localmente:
 
 ```bash
