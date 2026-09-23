@@ -4,6 +4,7 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   useMultiFileAuthState as loadMultiFileAuthState,
   type WASocket,
+  type WAMessage,
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
@@ -23,8 +24,53 @@ const conversationStates = new Map<string, {
   reservationId?: string;
 }>();
 const conversationStateTtlMs = 30 * 60 * 1000;
-const reservationCodePattern = /Código da reserva:\s*([0-9a-f-]{36})/i;
 const deliveryFee = 30;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function unwrapMessageContent(message: WAMessage["message"]) {
+  let content: Record<string, unknown> | undefined = isRecord(message)
+    ? message
+    : undefined;
+
+  for (let depth = 0; content && depth < 3; depth += 1) {
+    const wrapper = ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2"]
+      .map((key) => content?.[key])
+      .find(isRecord);
+
+    if (!wrapper) break;
+    content = isRecord(wrapper.message) ? wrapper.message : undefined;
+  }
+
+  return content;
+}
+
+function getIncomingMessageText(message: WAMessage) {
+  const content = unwrapMessageContent(message.message);
+  if (!content) return undefined;
+
+  const extendedText = isRecord(content.extendedTextMessage) ? content.extendedTextMessage : undefined;
+  const image = isRecord(content.imageMessage) ? content.imageMessage : undefined;
+  const video = isRecord(content.videoMessage) ? content.videoMessage : undefined;
+  const document = isRecord(content.documentMessage) ? content.documentMessage : undefined;
+  const text = [
+    content.conversation,
+    extendedText?.text,
+    image?.caption,
+    video?.caption,
+    document?.caption,
+  ].find((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  if (text) return text;
+  if (image || video || document) return "[comprovante enviado]";
+  return undefined;
+}
+
+function getReservationId(text: string) {
+  return /codigo\s+da\s+reserva\s*:\s*([0-9a-f-]{36})/i.exec(normalizeForBot(text))?.[1];
+}
 
 async function updateReservationDelivery(
   reservationId: string,
@@ -189,12 +235,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       if (message.key.fromMe || !message.message || !message.key.remoteJid) continue;
       if (message.key.remoteJid.endsWith("@g.us") || message.key.remoteJid === "status@broadcast") continue;
 
-      const hasImage = Boolean(message.message.imageMessage);
-      const text = message.message.conversation
-        || message.message.extendedTextMessage?.text
-        || message.message.imageMessage?.caption
-        || message.message.videoMessage?.caption
-        || (hasImage ? "[comprovante enviado]" : undefined);
+      const text = getIncomingMessageText(message);
 
       if (!text?.trim()) continue;
 
@@ -203,10 +244,9 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         const state = currentState && currentState.expiresAt > Date.now()
           ? currentState.state
           : "menu";
-        const reservationMatch = reservationCodePattern.exec(text);
+        const reservationId = getReservationId(text);
 
-        if (reservationMatch) {
-          const reservationId = reservationMatch[1];
+        if (reservationId) {
           conversationStates.set(message.key.remoteJid, {
             state: "delivery-choice",
             reservationId,

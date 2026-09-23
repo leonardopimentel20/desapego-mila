@@ -91,14 +91,11 @@ test.describe('Testes avançados de jornada do cliente', () => {
 
     const quantityInput = page.locator('input[type="number"]').first();
     const hasQuantitySelector = await quantityInput.count() > 0;
-    let expectedQuantity = 1;
-
     if (hasQuantitySelector) {
       const max = Number(await quantityInput.getAttribute('max'));
-      expectedQuantity = Math.min(max, 2);
-      await quantityInput.fill(String(expectedQuantity + 10));
+      const requestedQuantity = max + 10;
+      await quantityInput.fill(String(requestedQuantity));
       await expect(quantityInput).toHaveValue(String(max));
-      expectedQuantity = max;
     }
 
     await addButton.click();
@@ -108,7 +105,8 @@ test.describe('Testes avançados de jornada do cliente', () => {
 
     const drawerQuantity = drawer.getByRole('spinbutton').first();
     if (await drawerQuantity.count() > 0) {
-      await expect(drawerQuantity).toHaveValue(String(expectedQuantity));
+      const max = Number(await drawerQuantity.getAttribute('max'));
+      await expect(drawerQuantity).toHaveValue(String(max));
       await drawerQuantity.fill('999');
       await expect(drawerQuantity).toHaveValue(
         String(Number(await drawerQuantity.getAttribute('max'))),
