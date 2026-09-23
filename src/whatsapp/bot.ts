@@ -15,6 +15,7 @@ import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { whatsappConfig } from "./config.js";
 import { getAutomaticReply, type ConversationState } from "./menu.js";
+import { deliveryFields, deliveryPrompts, deliverySummary, isCompleteDelivery, validateDeliveryField, type DeliveryDraft, type DeliveryDetails, type DeliveryField } from "./delivery.js";
 
 const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 
@@ -22,11 +23,13 @@ let reconnecting = false;
 let reconnectAttempts = 0;
 let whatsappSocketActive = false;
 let qrGeneration = 0;
-type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation" | "payment" | "payment-proof";
+type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-details" | "delivery-confirmation" | "payment" | "payment-proof";
 const conversationStates = new Map<string, {
   state: BotState;
   expiresAt: number;
   reservationId?: string;
+  deliveryDraft?: DeliveryDraft;
+  deliveryField?: DeliveryField;
 }>();
 const conversationStateTtlMs = 30 * 60 * 1000;
 const deliveryFee = 30;
@@ -224,7 +227,11 @@ async function updateReservationDelivery(
   deliveryMethod: "pickup" | "motoboy",
   neighborhood: string | null,
   fee: number,
+  details?: DeliveryDetails,
 ) {
+  if (deliveryMethod === "motoboy" && !isCompleteDelivery(details)) {
+    throw new Error("Dados de entrega incompletos.");
+  }
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
   }
@@ -249,9 +256,12 @@ async function updateReservationDelivery(
 
     const [result] = await connection.execute(
       `UPDATE reservations
-       SET delivery_method = ?, delivery_neighborhood = ?, delivery_fee = ?, updated_at = CURRENT_TIMESTAMP
+       SET delivery_method = ?, delivery_neighborhood = ?, delivery_fee = ?,
+           delivery_recipient = ?, delivery_phone = ?, delivery_street = ?, delivery_number = ?,
+           delivery_complement = ?, delivery_reference = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = 'PENDING'`,
-      [deliveryMethod, neighborhood, fee, reservationId],
+      [deliveryMethod, neighborhood, fee, details?.recipient ?? null, details?.phone ?? null,
+        details?.street ?? null, details?.number ?? null, details?.complement || null, details?.reference || null, reservationId],
     );
 
     if (!("affectedRows" in result)) {
@@ -259,7 +269,9 @@ async function updateReservationDelivery(
     }
 
     const [updatedRows] = await connection.execute(
-      `SELECT delivery_method, delivery_neighborhood, delivery_fee
+      `SELECT delivery_method, delivery_neighborhood, delivery_fee,
+              delivery_recipient, delivery_phone, delivery_street, delivery_number,
+              delivery_complement, delivery_reference
        FROM reservations
        WHERE id = ? AND status = 'PENDING'
        LIMIT 1`,
@@ -269,6 +281,12 @@ async function updateReservationDelivery(
       delivery_method: string | null;
       delivery_neighborhood: string | null;
       delivery_fee: string | number | null;
+      delivery_recipient: string | null;
+      delivery_phone: string | null;
+      delivery_street: string | null;
+      delivery_number: string | null;
+      delivery_complement: string | null;
+      delivery_reference: string | null;
     }>)[0];
 
     if (
@@ -276,6 +294,12 @@ async function updateReservationDelivery(
       || updatedReservation.delivery_method !== deliveryMethod
       || updatedReservation.delivery_neighborhood !== neighborhood
       || Number(updatedReservation.delivery_fee || 0) !== fee
+      || updatedReservation.delivery_recipient !== (details?.recipient ?? null)
+      || updatedReservation.delivery_phone !== (details?.phone ?? null)
+      || updatedReservation.delivery_street !== (details?.street ?? null)
+      || updatedReservation.delivery_number !== (details?.number ?? null)
+      || updatedReservation.delivery_complement !== (details?.complement || null)
+      || updatedReservation.delivery_reference !== (details?.reference || null)
     ) {
       throw new Error("O banco não confirmou os dados de entrega da reserva.");
     }
@@ -554,22 +578,35 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           continue;
         }
 
-        if (state === "delivery-neighborhood" && currentState?.reservationId) {
-          const neighborhood = text.trim();
-          await updateReservationDelivery(currentState.reservationId, "motoboy", neighborhood, deliveryFee);
+        if ((state === "delivery-neighborhood" || state === "delivery-details") && currentState?.reservationId) {
+          const field = state === "delivery-neighborhood" ? "neighborhood" : currentState.deliveryField;
+          if (!field) throw new Error("Etapa de entrega inválida.");
+          const result = validateDeliveryField(field, text);
+          if (result.error) {
+            await socket.sendMessage(message.key.remoteJid, { text: result.error });
+            continue;
+          }
+          const deliveryDraft = { ...currentState.deliveryDraft, [field]: result.value };
+          const nextField = deliveryFields[deliveryFields.indexOf(field) + 1];
           conversationStates.set(message.key.remoteJid, {
             ...currentState,
-            state: "delivery-confirmation",
+            deliveryDraft,
+            deliveryField: nextField,
+            state: nextField ? "delivery-details" : "delivery-confirmation",
             expiresAt: Date.now() + conversationStateTtlMs,
           });
           await socket.sendMessage(message.key.remoteJid, {
-            text: `📍 Anotei: ${neighborhood}\n🚴 Taxa fixa de entrega: R$ 30,00\n\nEstá correto?\n1️⃣ Sim\n2️⃣ Corrigir bairro`,
+            text: nextField ? deliveryPrompts[nextField] : isCompleteDelivery(deliveryDraft)
+              ? deliverySummary(deliveryDraft) : "Dados incompletos. Envie novamente a mensagem da reserva para recomeçar.",
           });
           continue;
         }
 
         if (state === "delivery-confirmation" && currentState?.reservationId) {
           if (/^(1|sim|correto|confirmo)$/.test(normalizeForBot(text))) {
+            const details = currentState.deliveryDraft;
+            if (!isCompleteDelivery(details)) throw new Error("Dados de entrega incompletos.");
+            await updateReservationDelivery(currentState.reservationId, "motoboy", details.neighborhood, deliveryFee, details);
             const paymentReply = await getPaymentReply(currentState.reservationId);
             conversationStates.set(message.key.remoteJid, {
               ...currentState,
@@ -585,11 +622,15 @@ export async function startWhatsAppBot(): Promise<WASocket> {
             conversationStates.set(message.key.remoteJid, {
               ...currentState,
               state: "delivery-neighborhood",
+              deliveryDraft: undefined,
+              deliveryField: undefined,
               expiresAt: Date.now() + conversationStateTtlMs,
             });
             await socket.sendMessage(message.key.remoteJid, { text: "Claro! Envie novamente seu bairro e cidade." });
             continue;
           }
+          await socket.sendMessage(message.key.remoteJid, { text: "Responda *1* para confirmar os dados de entrega ou *2* para corrigir." });
+          continue;
         }
 
         if (state === "payment" && currentState?.reservationId) {

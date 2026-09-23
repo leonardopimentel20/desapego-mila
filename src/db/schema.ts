@@ -36,6 +36,12 @@ export const reservations = mysqlTable('reservations', {
   deliveryMethod: varchar('delivery_method', { length: 20 }),
   deliveryNeighborhood: varchar('delivery_neighborhood', { length: 120 }),
   deliveryFee: decimal('delivery_fee', { precision: 10, scale: 2 }),
+  deliveryRecipient: varchar('delivery_recipient', { length: 255 }),
+  deliveryPhone: varchar('delivery_phone', { length: 30 }),
+  deliveryStreet: varchar('delivery_street', { length: 255 }),
+  deliveryNumber: varchar('delivery_number', { length: 30 }),
+  deliveryComplement: varchar('delivery_complement', { length: 255 }),
+  deliveryReference: varchar('delivery_reference', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });

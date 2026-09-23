@@ -347,6 +347,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
                     {/* Lista de Peças solicitadas por essa cliente */}
                     <div className="space-y-2 border-t border-neutral-100 px-4 pb-4 pt-3">
+                      {group.deliveryMethod === "motoboy" && group.reservationStatus !== "CANCELLED" && (
+                        <Link href={`/admin/reservas/${group.reservationId}/etiqueta`} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex rounded-xl border border-pink-200 bg-pink-50 px-4 py-2 text-xs font-bold text-pink-700 hover:bg-pink-100">
+                          Ver / imprimir etiqueta de entrega
+                        </Link>
+                      )}
                       <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">Garimpos solicitados ({group.products.length}):</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {group.products.map((product) => {
