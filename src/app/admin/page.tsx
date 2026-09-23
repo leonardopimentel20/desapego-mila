@@ -24,6 +24,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const [whatsappSetting] = await db.select({
     enabled: whatsappSettings.enabled,
     disconnectRequested: whatsappSettings.disconnectRequested,
+    connectedPhone: whatsappSettings.connectedPhone,
   }).from(whatsappSettings).where(eq(whatsappSettings.id, 1));
 
   // Métricas gerais do catálogo
@@ -228,6 +229,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <WhatsAppControls
           enabled={whatsappSetting?.enabled === 1}
           disconnectRequested={whatsappSetting?.disconnectRequested === 1}
+          connectedPhone={whatsappSetting?.connectedPhone ?? null}
         />
 
         {/* Formulário Dinâmico de Cadastro usando a action centralizada */}

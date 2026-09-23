@@ -7,9 +7,16 @@ import { requestWhatsAppDisconnectAction, setWhatsAppEnabledAction } from '../ap
 interface WhatsAppControlsProps {
   enabled: boolean;
   disconnectRequested: boolean;
+  connectedPhone: string | null;
 }
 
-export function WhatsAppControls({ enabled, disconnectRequested }: WhatsAppControlsProps) {
+function formatPhone(phone: string | null) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
+}
+
+export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone }: WhatsAppControlsProps) {
   const [isPending, startTransition] = useTransition();
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -51,6 +58,9 @@ export function WhatsAppControls({ enabled, disconnectRequested }: WhatsAppContr
               : enabled
                 ? 'Atendimento automático ativo.'
                 : 'Atendimento pausado. A sessão continua preservada.'}
+          </p>
+          <p className="mt-2 text-sm font-semibold text-neutral-700">
+            Número conectado: {formatPhone(connectedPhone) || 'aguardando pareamento por QR Code'}
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-bold ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>

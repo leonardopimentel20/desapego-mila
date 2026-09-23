@@ -16,6 +16,12 @@ try {
     ) ENGINE=InnoDB
   `);
   await connection.execute(`
+    ALTER TABLE whatsapp_settings
+      ADD COLUMN connected_phone VARCHAR(30) NULL
+  `).catch((error) => {
+    if (error?.code !== "ER_DUP_FIELDNAME") throw error;
+  });
+  await connection.execute(`
     INSERT INTO whatsapp_settings (id, enabled, disconnect_requested)
     VALUES (1, 1, 0)
     ON DUPLICATE KEY UPDATE id = id

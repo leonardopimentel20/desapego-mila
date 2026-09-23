@@ -121,6 +121,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 WHATSAPP_BOT_PORT=3001
 WHATSAPP_AUTH_FOLDER=./auth_info_baileys
 WHATSAPP_LOG_LEVEL=info
+WHATSAPP_EXPECTED_NUMBER=47996473275
 ```
 
 Use valores diferentes entre desenvolvimento e produção. Alterar `ADMIN_PASSWORD` ou `ADMIN_SESSION_SECRET` invalida as sessões administrativas anteriores.
@@ -194,7 +195,7 @@ Para iniciar localmente:
 npm run whatsapp
 ```
 
-Na primeira execução, abra o WhatsApp no celular em **Configurações → Dispositivos conectados → Conectar dispositivo** e escaneie o QR Code exibido no terminal. Nas próximas reinicializações, a sessão será carregada da pasta configurada em `WHATSAPP_AUTH_FOLDER`.
+Na primeira execução, abra o WhatsApp no celular em **Configurações → Dispositivos conectados → Conectar dispositivo** e escaneie o QR Code exibido no terminal. Nas próximas reinicializações, a sessão será carregada da pasta configurada em `WHATSAPP_AUTH_FOLDER`. `WHATSAPP_EXPECTED_NUMBER` é opcional e apenas alerta nos logs se outro número for pareado; ele não substitui o escaneamento do QR Code. O número efetivamente conectado aparece no painel administrativo.
 
 O health check do serviço fica em [http://localhost:3001/health](http://localhost:3001/health). Mensagens de grupos, status e mensagens enviadas pelo próprio bot são ignoradas. Em produção, defina
 `NEXT_PUBLIC_APP_URL` com a URL pública da vitrine; sem essa variável, o bot usa

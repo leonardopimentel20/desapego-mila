@@ -89,8 +89,32 @@ async function getWhatsAppControl() {
   }
 }
 
+async function saveConnectedPhone(phone: string | null) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      "UPDATE whatsapp_settings SET connected_phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+      [phone],
+    );
+  } finally {
+    await connection.end();
+  }
+}
+
+function getConnectedPhone(socket: WASocket) {
+  const id = socket.user?.id;
+  if (!id) return null;
+  return id.split("@", 1)[0].split(":", 1)[0].replace(/\D/g, "") || null;
+}
+
 async function completeDisconnectRequest() {
   await rm(whatsappConfig.authFolder, { recursive: true, force: true });
+  await saveConnectedPhone(null);
+}
+
+function formatPhoneForLog(phone: string) {
+  return phone.startsWith("55") ? `+${phone}` : `+55${phone}`;
 }
 
 async function updateReservationDelivery(
@@ -286,7 +310,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
   }, 5000);
 
   socket.ev.on("creds.update", saveCreds);
-  socket.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
+  socket.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       console.log("\nEscaneie este QR Code no WhatsApp:\n");
       qrcode.generate(qr, { small: true });
@@ -295,7 +319,14 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     if (connection === "open") {
       reconnecting = false;
       reconnectAttempts = 0;
-      console.log("WhatsApp conectado com sucesso.");
+      const connectedPhone = getConnectedPhone(socket);
+      await saveConnectedPhone(connectedPhone);
+      console.log(`WhatsApp conectado com sucesso: ${connectedPhone ? formatPhoneForLog(connectedPhone) : "número não identificado"}.`);
+      if (whatsappConfig.expectedPhone && connectedPhone !== whatsappConfig.expectedPhone) {
+        console.error(
+          `Número inesperado conectado. Esperado: ${formatPhoneForLog(whatsappConfig.expectedPhone)}; conectado: ${connectedPhone ? formatPhoneForLog(connectedPhone) : "não identificado"}.`,
+        );
+      }
     }
 
     if (connection === "close") {

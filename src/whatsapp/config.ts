@@ -8,4 +8,5 @@ export const whatsappConfig = {
   pixKeyType: process.env.PIX_KEY_TYPE || "chave Pix",
   pixName: process.env.PIX_NAME || "Desapego da Mila",
   pixCity: process.env.PIX_CITY || "",
+  expectedPhone: (process.env.WHATSAPP_EXPECTED_NUMBER || "").replace(/\D/g, ""),
 };
