@@ -12,6 +12,7 @@ import QRCode from "qrcode";
 import { Boom } from "@hapi/boom";
 import mysql from "mysql2/promise";
 import { rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { whatsappConfig } from "./config.js";
 import { getAutomaticReply, type ConversationState } from "./menu.js";
 
@@ -89,6 +90,77 @@ async function getWhatsAppControl() {
   } finally {
     await connection.end();
   }
+}
+
+function getCustomerPhone(jid: string) {
+  return jid.split("@", 1)[0].split(":", 1)[0].replace(/\D/g, "");
+}
+
+function getOwnerJid() {
+  if (!/^\d{8,15}$/.test(whatsappConfig.ownerPhone)) return null;
+  return `${whatsappConfig.ownerPhone}@s.whatsapp.net`;
+}
+
+async function hasPendingHandoff(customerJid: string) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    const [rows] = await connection.execute(
+      "SELECT id FROM whatsapp_handoffs WHERE customer_jid = ? AND status = 'PENDING' LIMIT 1",
+      [customerJid],
+    );
+    return (rows as Array<{ id: string }>).length > 0;
+  } finally {
+    await connection.end();
+  }
+}
+
+async function createHandoff(customerJid: string, message: string) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      `INSERT INTO whatsapp_handoffs
+       (id, customer_jid, customer_phone, last_message, status)
+       VALUES (?, ?, ?, ?, 'PENDING')
+       ON DUPLICATE KEY UPDATE last_message = VALUES(last_message), status = 'PENDING', updated_at = CURRENT_TIMESTAMP`,
+      [randomUUID(), customerJid, getCustomerPhone(customerJid), message.slice(0, 4000)],
+    );
+  } finally {
+    await connection.end();
+  }
+}
+
+async function resumeHandoff(customerJid: string) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      "UPDATE whatsapp_handoffs SET status = 'RESUMED', updated_at = CURRENT_TIMESTAMP WHERE customer_jid = ? AND status = 'PENDING'",
+      [customerJid],
+    );
+  } finally {
+    await connection.end();
+  }
+}
+
+async function notifyOwner(socket: WASocket, customerJid: string, message: string) {
+  const ownerJid = getOwnerJid();
+  if (!ownerJid) {
+    console.error("WHATSAPP_OWNER_PHONE não configurado ou inválido; o pedido humano foi registrado, mas não foi enviado alerta.");
+    return false;
+  }
+  await socket.sendMessage(ownerJid, {
+    text: [
+      "🔔 Novo atendimento solicitado",
+      "",
+      `Cliente: ${getCustomerPhone(customerJid) || "número não identificado"}`,
+      `Mensagem: ${message.slice(0, 500)}`,
+      "",
+      "Responda diretamente ao cliente no WhatsApp. O robô ficará em silêncio nesta conversa até o cliente enviar *menu*.",
+    ].join("\n"),
+  });
+  return true;
 }
 
 async function saveConnectedPhone(phone: string | null) {
@@ -433,6 +505,12 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           : "menu";
         const reservationId = getReservationId(text);
 
+        if (/^menu$|^inicio$/.test(normalizeForBot(text))) {
+          await resumeHandoff(message.key.remoteJid);
+        } else if (await hasPendingHandoff(message.key.remoteJid)) {
+          continue;
+        }
+
         if (reservationId) {
           conversationStates.set(message.key.remoteJid, {
             state: "delivery-choice",
@@ -544,6 +622,21 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           conversationStates.delete(message.key.remoteJid);
           await socket.sendMessage(message.key.remoteJid, {
             text: "Comprovante recebido 😊 A Mila vai conferir o Pix e confirmar sua reserva. Assim que validar, ela continuará com você até finalizar a entrega ou retirada.",
+          });
+          continue;
+        }
+
+        if (normalizeForBot(text) === "4") {
+          await createHandoff(message.key.remoteJid, text);
+          const notified = await notifyOwner(socket, message.key.remoteJid, text);
+          conversationStates.set(message.key.remoteJid, {
+            state: "menu",
+            expiresAt: Date.now() + conversationStateTtlMs,
+          });
+          await socket.sendMessage(message.key.remoteJid, {
+            text: notified
+              ? "💬 Avisei a Mila agora. Ela recebeu seu pedido e falará com você assim que estiver disponível."
+              : "💬 Registrei seu pedido de atendimento. A Mila será avisada assim que o número administrativo estiver configurado.",
           });
           continue;
         }

@@ -38,6 +38,17 @@ try {
     VALUES (1, 1, 0)
     ON DUPLICATE KEY UPDATE id = id
   `);
+  await connection.execute(`
+    CREATE TABLE IF NOT EXISTS whatsapp_handoffs (
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      customer_jid VARCHAR(120) NOT NULL UNIQUE,
+      customer_phone VARCHAR(30) NOT NULL,
+      last_message TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB
+  `);
 } finally {
   await connection.end();
 }

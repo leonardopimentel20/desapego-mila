@@ -56,3 +56,13 @@ export const whatsappSettings = mysqlTable('whatsapp_settings', {
   connectionError: varchar('connection_error', { length: 255 }),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });
+
+export const whatsappHandoffs = mysqlTable('whatsapp_handoffs', {
+  id: varchar('id', { length: 36 }).primaryKey(),
+  customerJid: varchar('customer_jid', { length: 120 }).notNull().unique(),
+  customerPhone: varchar('customer_phone', { length: 30 }).notNull(),
+  lastMessage: text('last_message').notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('PENDING'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
