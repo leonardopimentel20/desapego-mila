@@ -33,13 +33,13 @@ function parseId(value: string) {
 
 function getProductData(formData: FormData) {
   const priceInput = String(formData.get("price") || "").trim();
-  const sanitizedPrice = priceInput.replace(/[^\d,]/g, "").replace(",", ".");
+  const sanitizedPrice = parsePrice(priceInput);
   const stockInput = String(formData.get("stock") || "").trim();
 
   const validation = productSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description") || "",
-    price: sanitizedPrice === "" ? NaN : Number(sanitizedPrice),
+    price: sanitizedPrice,
     stock: stockInput === "" ? NaN : Number(stockInput),
     categoryId: formData.get("categoryId"),
     size: formData.get("size"),
@@ -49,6 +49,24 @@ function getProductData(formData: FormData) {
 
   if (!validation.success) throw new Error(validation.error.issues[0].message);
   return validation.data;
+}
+
+function parsePrice(value: string) {
+  if (!value) return NaN;
+
+  // PriceInput submits a canonical decimal value (e.g. "454.54").
+  if (/^\d+(?:\.\d{1,2})?$/.test(value)) {
+    return Number(value);
+  }
+
+  const normalized = value.replace(/[^\d,.]/g, "");
+  if (!normalized) return NaN;
+
+  if (normalized.includes(",")) {
+    return Number(normalized.replace(/\./g, "").replace(",", "."));
+  }
+
+  return Number(normalized);
 }
 
 function createSlug(title: string, productId: string) {
