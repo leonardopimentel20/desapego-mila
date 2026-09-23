@@ -46,3 +46,10 @@ export const reservationItems = mysqlTable('reservation_items', {
   productId: varchar('product_id', { length: 36 }).notNull(),
   quantity: int('quantity').notNull(),
 });
+
+export const whatsappSettings = mysqlTable('whatsapp_settings', {
+  id: int('id').primaryKey(),
+  enabled: int('enabled').notNull().default(1),
+  disconnectRequested: int('disconnect_requested').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});

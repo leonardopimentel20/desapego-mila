@@ -169,6 +169,11 @@ O serviço do bot precisa ter a mesma variável `DATABASE_URL` do serviço web p
 e atualizar as reservas. As migrações de entrega são executadas pelo `npm start`:
 `db:migrate:delivery`.
 
+O painel administrativo também permite pausar e reativar o atendimento automático. Pausar
+não desconecta o WhatsApp nem apaga a sessão: apenas impede novas respostas até a reativação.
+A opção de desconectar encerra a sessão atual e, ao reativar o serviço, será necessário
+parear novamente o número por QR Code.
+
 Para continuar o atendimento até o pagamento, configure no serviço do bot:
 
 ```env

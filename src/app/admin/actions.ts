@@ -3,7 +3,7 @@
 import { db } from "../../db";
 import { redirect } from "next/navigation";
 import { eq, and, inArray } from "drizzle-orm";
-import { products, productImages, reservations, reservationItems } from "../../db/schema";
+import { products, productImages, reservations, reservationItems, whatsappSettings } from "../../db/schema";
 import { productSchema } from "../../db/validator";
 import { v2 as cloudinary } from "cloudinary";
 import { randomUUID } from "crypto";
@@ -24,6 +24,30 @@ const reservationSchema = z.object({
 const MAX_IMAGES = 6;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+export async function setWhatsAppEnabledAction(enabled: boolean): Promise<void> {
+  await requireAdminSession();
+  await db.insert(whatsappSettings).values({
+    id: 1,
+    enabled: enabled ? 1 : 0,
+    disconnectRequested: 0,
+  }).onDuplicateKeyUpdate({
+    set: { enabled: enabled ? 1 : 0, disconnectRequested: 0, updatedAt: new Date() },
+  });
+  revalidatePath("/admin");
+}
+
+export async function requestWhatsAppDisconnectAction(): Promise<void> {
+  await requireAdminSession();
+  await db.insert(whatsappSettings).values({
+    id: 1,
+    enabled: 0,
+    disconnectRequested: 1,
+  }).onDuplicateKeyUpdate({
+    set: { enabled: 0, disconnectRequested: 1, updatedAt: new Date() },
+  });
+  revalidatePath("/admin");
+}
 
 function parseId(value: string) {
   const result = idSchema.safeParse(value);

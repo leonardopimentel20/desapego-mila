@@ -17,6 +17,7 @@ const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 
 let reconnecting = false;
 let reconnectAttempts = 0;
+let whatsappSocketActive = false;
 type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation" | "payment" | "payment-proof";
 const conversationStates = new Map<string, {
   state: BotState;
@@ -25,6 +26,7 @@ const conversationStates = new Map<string, {
 }>();
 const conversationStateTtlMs = 30 * 60 * 1000;
 const deliveryFee = 30;
+let whatsappControlTimer: ReturnType<typeof setInterval> | undefined;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -70,6 +72,32 @@ function getIncomingMessageText(message: WAMessage) {
 
 function getReservationId(text: string) {
   return /codigo\s+da\s+reserva\s*:\s*([0-9a-f-]{36})/i.exec(normalizeForBot(text))?.[1];
+}
+
+async function getWhatsAppControl() {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    const [rows] = await connection.execute(
+      "SELECT enabled, disconnect_requested FROM whatsapp_settings WHERE id = 1 LIMIT 1",
+    );
+    const [settings] = rows as Array<{ enabled: number; disconnect_requested: number }>;
+    return settings || { enabled: 1, disconnect_requested: 0 };
+  } finally {
+    await connection.end();
+  }
+}
+
+async function clearDisconnectRequest() {
+  if (!process.env.DATABASE_URL) return;
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      "UPDATE whatsapp_settings SET disconnect_requested = 0 WHERE id = 1",
+    );
+  } finally {
+    await connection.end();
+  }
 }
 
 async function updateReservationDelivery(
@@ -225,6 +253,30 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     syncFullHistory: false,
     version,
   });
+  whatsappSocketActive = true;
+
+  if (whatsappControlTimer) clearInterval(whatsappControlTimer);
+  whatsappControlTimer = setInterval(() => {
+    void getWhatsAppControl().then(async (control) => {
+      if (control.disconnect_requested) {
+        await clearDisconnectRequest();
+        await socket.logout();
+        return;
+      }
+      if (control.enabled && !whatsappSocketActive && !reconnecting) {
+        reconnecting = true;
+        reconnectAttempts += 1;
+        setTimeout(() => {
+          void startWhatsAppBot().catch((error: unknown) => {
+            reconnecting = false;
+            console.error("Falha ao reativar o WhatsApp:", error);
+          });
+        }, 3000);
+      }
+    }).catch((error: unknown) => {
+      console.error("Não foi possível consultar o controle do WhatsApp:", error);
+    });
+  }, 5000);
 
   socket.ev.on("creds.update", saveCreds);
   socket.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
@@ -240,6 +292,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     }
 
     if (connection === "close") {
+      whatsappSocketActive = false;
       const statusCode = getDisconnectStatus(lastDisconnect?.error);
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       console.error(`Conexão do WhatsApp encerrada. Código: ${statusCode ?? "desconhecido"}.`);
@@ -249,15 +302,20 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           "O WhatsApp rejeitou o handshake (405). Atualize o Baileys e tente novamente mais tarde.",
         );
       } else if (!loggedOut && !reconnecting && reconnectAttempts < 5) {
-        reconnecting = true;
-        reconnectAttempts += 1;
-        console.log("Tentando reconectar o WhatsApp...");
-        setTimeout(() => {
-          void startWhatsAppBot().catch((error: unknown) => {
-            reconnecting = false;
-            console.error("Falha ao reconectar o WhatsApp:", error);
-          });
-        }, 3000);
+        void getWhatsAppControl().then((control) => {
+          if (!control.enabled || control.disconnect_requested) return;
+          reconnecting = true;
+          reconnectAttempts += 1;
+          console.log("Tentando reconectar o WhatsApp...");
+          setTimeout(() => {
+            void startWhatsAppBot().catch((error: unknown) => {
+              reconnecting = false;
+              console.error("Falha ao reconectar o WhatsApp:", error);
+            });
+          }, 3000);
+        }).catch((error: unknown) => {
+          console.error("Não foi possível verificar se a reconexão está habilitada:", error);
+        });
       } else if (reconnectAttempts >= 5) {
         console.error("Reconexão interrompida após 5 tentativas. Reinicie o serviço após verificar a conexão.");
       } else if (loggedOut) {
@@ -272,6 +330,8 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     for (const message of messages) {
       if (message.key.fromMe || !message.message || !message.key.remoteJid) continue;
       if (message.key.remoteJid.endsWith("@g.us") || message.key.remoteJid === "status@broadcast") continue;
+      const control = await getWhatsAppControl();
+      if (!control.enabled) continue;
 
       const text = getIncomingMessageText(message);
 

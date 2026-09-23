@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "npm run db:migrate:initial && npm run db:migrate:reservation && npm run db:migrate:reservations && npm run db:migrate:delivery && npm run db:migrate:sold-quantity && next start",
+    "start": "npm run db:migrate:initial && npm run db:migrate:reservation && npm run db:migrate:reservations && npm run db:migrate:delivery && npm run db:migrate:sold-quantity && npm run db:migrate:whatsapp-settings && next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "playwright test",
@@ -17,7 +17,8 @@
     "db:migrate:reservations": "node scripts/migrate-reservations.mjs",
     "db:migrate:delivery": "node scripts/migrate-delivery.mjs",
     "db:migrate:sold-quantity": "node scripts/migrate-sold-quantity.mjs",
-    "whatsapp": "npm run db:migrate:delivery && tsx src/whatsapp/index.ts"
+    "db:migrate:whatsapp-settings": "node scripts/migrate-whatsapp-settings.mjs",
+    "whatsapp": "npm run db:migrate:delivery && npm run db:migrate:whatsapp-settings && tsx src/whatsapp/index.ts"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

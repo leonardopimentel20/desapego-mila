@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { products, reservations, reservationItems } from "../../db/schema";
+import { products, reservations, reservationItems, whatsappSettings } from "../../db/schema";
 import { eq, desc, like, sql, sum, count, and, gt } from "drizzle-orm";
 import { deleteProductAction, registerSaleAction, setProductStatusAction, createProductAction, confirmReservationAction, cancelReservationAction, removeReservationItemAction } from "./actions";
 import { SearchBox } from "../../components/SearchBox";
@@ -9,6 +9,7 @@ import { ProductForm } from "../../components/ProductForm";
 import { DeleteButton } from "../../components/DeleteButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { WhatsAppControls } from "../../components/WhatsAppControls";
 
 interface AdminPageProps {
   searchParams: Promise<{ success?: string; error?: string; search?: string; status?: string }>;
@@ -20,6 +21,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const error = resolvedParams?.error;
   const search = resolvedParams?.search || "";
   const status = resolvedParams?.status || "all";
+  const [whatsappSetting] = await db.select({ enabled: whatsappSettings.enabled }).from(whatsappSettings).where(eq(whatsappSettings.id, 1));
 
   // Métricas gerais do catálogo
   const [metrics] = await db.select({
@@ -219,6 +221,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {success === 'status' && <SuccessBanner message="🔄 Status do produto atualizado!" />}
         {success === 'excluido' && <SuccessBanner message="🗑️ Garimpo excluído com sucesso!" />}
         {error && <ErrorBanner message={error} />}
+
+        <WhatsAppControls enabled={whatsappSetting?.enabled === 1} />
 
         {/* Formulário Dinâmico de Cadastro usando a action centralizada */}
         <details id="novo-produto" className="scroll-mt-20 rounded-2xl border border-neutral-200/80 bg-white shadow-xs">
