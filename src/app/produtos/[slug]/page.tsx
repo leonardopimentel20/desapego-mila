@@ -7,6 +7,8 @@ import { AddToCartButton } from "../../../components/AddToCartButton";
 import { CartButton } from "../../../components/CartButton";
 import { CartDrawer } from "../../../components/CartDrawer";
 
+export const dynamic = "force-dynamic";
+
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
 }

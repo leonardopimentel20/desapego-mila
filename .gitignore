@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 .env
+!.env.example
 auth_info_baileys
 .next
 /.pnp
@@ -35,6 +36,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel

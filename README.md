@@ -198,22 +198,22 @@ Antes de publicar:
 O projeto pode ser publicado diretamente a partir do repositório GitHub:
 
 1. crie um novo projeto no Railway e selecione **Deploy from GitHub repo**;
-2. selecione este repositório e mantenha o build padrão baseado no `package.json`;
-3. configure as variáveis de ambiente da seção anterior no serviço web;
-4. configure o domínio público em **Settings > Networking > Generate Domain**;
-5. defina `/api/health` como health check, se essa opção estiver disponível no plano;
-6. execute a migração do banco uma vez antes de liberar o painel administrativo:
+2. adicione um serviço **MySQL** ao mesmo projeto Railway ou use um MySQL externo;
+3. no serviço da aplicação, crie a variável `DATABASE_URL` com a URL do banco;
+4. configure as demais variáveis da seção anterior no serviço web;
+5. configure o domínio público em **Settings > Networking > Generate Domain**.
 
-```bash
-npm run db:migrate:reservation
-npm run db:migrate:reservations
-```
+Quando o MySQL for provisionado pelo próprio Railway, a variável normalmente pode ser vinculada
+com a referência entre serviços `\${{MySQL.MYSQL_URL}}` (ajuste `MySQL` para o nome exato do
+serviço). Se usar um banco externo, cole a URL completa no formato
+`mysql://usuario:senha@host:3306/nome_do_banco`.
 
-O script `npm start` não fixa a porta: o Railway fornece a variável `PORT` automaticamente.
-O endpoint `/api/health` retorna `{ "status": "ok" }` para verificar se o processo está respondendo.
+O arquivo `railway.toml` já define `npm start` como comando de inicialização e `/api/health`
+como health check. O comando `npm start` executa as três migrações idempotentes antes de iniciar
+o Next.js, e o Railway fornece a porta por meio da variável `PORT`.
 
-O MySQL pode ser um serviço provisionado no Railway ou um banco externo. Em ambos os casos,
-copie a URL completa para `DATABASE_URL` e confirme que o banco permite conexões a partir do Railway.
+Para configurar localmente, copie `.env.example` para `.env` e substitua todos os valores de
+exemplo. Nunca publique `.env` nem coloque senhas no `railway.toml`.
 
 ### WhatsApp: situação atual e próximos passos
 
