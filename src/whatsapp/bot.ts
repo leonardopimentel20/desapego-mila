@@ -264,13 +264,15 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           console.error("Não foi possível encerrar a sessão do WhatsApp normalmente:", error);
         } finally {
           await completeDisconnectRequest();
+          reconnecting = false;
+          reconnectAttempts = 0;
           console.log("Sessão do WhatsApp removida. Reative o atendimento para gerar um novo QR Code.");
         }
         return;
       }
       if (control.enabled && !whatsappSocketActive && !reconnecting) {
         reconnecting = true;
-        reconnectAttempts += 1;
+        console.log("Atendimento reativado. Iniciando uma nova sessão do WhatsApp...");
         setTimeout(() => {
           void startWhatsAppBot().catch((error: unknown) => {
             reconnecting = false;
