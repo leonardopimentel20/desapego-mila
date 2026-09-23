@@ -203,6 +203,8 @@ Na primeira execução, abra o WhatsApp no celular em **Configurações → Disp
 O health check do serviço fica em [http://localhost:3001/health](http://localhost:3001/health). Mensagens de grupos, status e mensagens enviadas pelo próprio bot são ignoradas. Em produção, defina
 `NEXT_PUBLIC_APP_URL` com a URL pública da vitrine; sem essa variável, o bot usa
 `https://desapego-mila-production.up.railway.app` como padrão.
+Informe somente a origem pública, sem `/admin`, `/login` ou outro caminho; o bot
+normaliza a variável para a raiz da vitrine.
 
 ### Hospedagem do bot
 
