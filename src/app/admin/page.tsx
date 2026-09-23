@@ -21,7 +21,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const error = resolvedParams?.error;
   const search = resolvedParams?.search || "";
   const status = resolvedParams?.status || "all";
-  const [whatsappSetting] = await db.select({ enabled: whatsappSettings.enabled }).from(whatsappSettings).where(eq(whatsappSettings.id, 1));
+  const [whatsappSetting] = await db.select({
+    enabled: whatsappSettings.enabled,
+    disconnectRequested: whatsappSettings.disconnectRequested,
+  }).from(whatsappSettings).where(eq(whatsappSettings.id, 1));
 
   // Métricas gerais do catálogo
   const [metrics] = await db.select({
@@ -222,7 +225,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {success === 'excluido' && <SuccessBanner message="🗑️ Garimpo excluído com sucesso!" />}
         {error && <ErrorBanner message={error} />}
 
-        <WhatsAppControls enabled={whatsappSetting?.enabled === 1} />
+        <WhatsAppControls
+          enabled={whatsappSetting?.enabled === 1}
+          disconnectRequested={whatsappSetting?.disconnectRequested === 1}
+        />
 
         {/* Formulário Dinâmico de Cadastro usando a action centralizada */}
         <details id="novo-produto" className="scroll-mt-20 rounded-2xl border border-neutral-200/80 bg-white shadow-xs">

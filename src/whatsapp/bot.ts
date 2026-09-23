@@ -10,6 +10,7 @@ import pino from "pino";
 import qrcode from "qrcode-terminal";
 import { Boom } from "@hapi/boom";
 import mysql from "mysql2/promise";
+import { rm } from "node:fs/promises";
 import { whatsappConfig } from "./config.js";
 import { getAutomaticReply, type ConversationState } from "./menu.js";
 
@@ -88,16 +89,8 @@ async function getWhatsAppControl() {
   }
 }
 
-async function clearDisconnectRequest() {
-  if (!process.env.DATABASE_URL) return;
-  const connection = await mysql.createConnection(process.env.DATABASE_URL);
-  try {
-    await connection.execute(
-      "UPDATE whatsapp_settings SET disconnect_requested = 0 WHERE id = 1",
-    );
-  } finally {
-    await connection.end();
-  }
+async function completeDisconnectRequest() {
+  await rm(whatsappConfig.authFolder, { recursive: true, force: true });
 }
 
 async function updateReservationDelivery(
@@ -259,8 +252,20 @@ export async function startWhatsAppBot(): Promise<WASocket> {
   whatsappControlTimer = setInterval(() => {
     void getWhatsAppControl().then(async (control) => {
       if (control.disconnect_requested) {
-        await clearDisconnectRequest();
-        await socket.logout();
+        if (!whatsappSocketActive) {
+          await completeDisconnectRequest();
+          return;
+        }
+
+        whatsappSocketActive = false;
+        try {
+          await socket.logout();
+        } catch (error) {
+          console.error("Não foi possível encerrar a sessão do WhatsApp normalmente:", error);
+        } finally {
+          await completeDisconnectRequest();
+          console.log("Sessão do WhatsApp removida. Reative o atendimento para gerar um novo QR Code.");
+        }
         return;
       }
       if (control.enabled && !whatsappSocketActive && !reconnecting) {
@@ -319,7 +324,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       } else if (reconnectAttempts >= 5) {
         console.error("Reconexão interrompida após 5 tentativas. Reinicie o serviço após verificar a conexão.");
       } else if (loggedOut) {
-        console.error("Sessão desconectada por logout. Remova a pasta de autenticação e escaneie um novo QR Code.");
+        console.error("Sessão desconectada por logout. Reative o atendimento para gerar um novo QR Code.");
       }
     }
   });

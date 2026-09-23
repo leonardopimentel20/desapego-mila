@@ -6,9 +6,10 @@ import { requestWhatsAppDisconnectAction, setWhatsAppEnabledAction } from '../ap
 
 interface WhatsAppControlsProps {
   enabled: boolean;
+  disconnectRequested: boolean;
 }
 
-export function WhatsAppControls({ enabled }: WhatsAppControlsProps) {
+export function WhatsAppControls({ enabled, disconnectRequested }: WhatsAppControlsProps) {
   const [isPending, startTransition] = useTransition();
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -45,16 +46,20 @@ export function WhatsAppControls({ enabled }: WhatsAppControlsProps) {
         <div>
           <h2 className="text-lg font-bold">Atendimento pelo WhatsApp</h2>
           <p className="mt-1 text-xs text-neutral-500">
-            {enabled ? 'Atendimento automático ativo.' : 'Atendimento pausado. A sessão continua preservada.'}
+            {disconnectRequested
+              ? 'Número desconectado. Reative para gerar um novo QR Code nos logs do serviço.'
+              : enabled
+                ? 'Atendimento automático ativo.'
+                : 'Atendimento pausado. A sessão continua preservada.'}
           </p>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-bold ${enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-          {enabled ? 'ATIVO' : 'PAUSADO'}
+          {disconnectRequested ? 'DESCONECTADO' : enabled ? 'ATIVO' : 'PAUSADO'}
         </span>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={toggle} disabled={isPending} className="rounded-xl bg-pink-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
-          {isPending ? 'Salvando...' : enabled ? 'Pausar atendimento' : 'Reativar atendimento'}
+          {isPending ? 'Salvando...' : disconnectRequested ? 'Gerar novo QR Code' : enabled ? 'Pausar atendimento' : 'Reativar atendimento'}
         </button>
         <button type="button" onClick={() => setShowDisconnectDialog(true)} disabled={isPending} className="rounded-xl border border-red-200 px-4 py-2 text-xs font-bold text-red-700 disabled:opacity-50">
           Desconectar número
