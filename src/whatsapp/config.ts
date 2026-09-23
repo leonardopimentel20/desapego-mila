@@ -25,3 +25,30 @@ export const whatsappConfig = {
   expectedPhone: (process.env.WHATSAPP_EXPECTED_NUMBER || "").replace(/\D/g, ""),
   ownerPhone: (process.env.WHATSAPP_OWNER_PHONE || "").replace(/\D/g, ""),
 };
+
+export function validateWhatsAppConfig() {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!process.env.DATABASE_URL) {
+    errors.push("DATABASE_URL não está configurada.");
+  }
+
+  if (!whatsappConfig.ownerPhone) {
+    warnings.push("WHATSAPP_OWNER_PHONE não configurada; alertas de atendimento humano ficarão apenas registrados no banco.");
+  } else if (!/^\d{8,15}$/.test(whatsappConfig.ownerPhone)) {
+    errors.push("WHATSAPP_OWNER_PHONE deve conter de 8 a 15 dígitos, incluindo o código do país.");
+  }
+
+  if (!whatsappConfig.pixKey) {
+    warnings.push("PIX_KEY não configurada; o bot não enviará uma chave Pix automaticamente.");
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Configuração inválida do WhatsApp: ${errors.join(" ")}`);
+  }
+
+  for (const warning of warnings) {
+    console.warn(`[WhatsApp] ${warning}`);
+  }
+}

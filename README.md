@@ -206,6 +206,12 @@ O health check do serviço fica em [http://localhost:3001/health](http://localho
 Informe somente a origem pública, sem `/admin`, `/login` ou outro caminho; o bot
 normaliza a variável para a raiz da vitrine.
 
+Use [.env.example](./.env.example) como referência. Nunca copie credenciais reais
+para o Git, nunca compartilhe `.env` e mantenha as variáveis privadas configuradas
+diretamente no Railway. O serviço valida `DATABASE_URL` e
+`WHATSAPP_OWNER_PHONE` ao iniciar e registra avisos seguros quando Pix ou alertas
+humanos não estiverem configurados.
+
 ### Hospedagem do bot
 
 O bot deve rodar como um serviço separado do Next.js, por exemplo com o comando `npm run whatsapp`. A pasta `auth_info_baileys` precisa estar em um volume persistente; sem isso, o QR Code será solicitado novamente após cada deploy. Não coloque essa pasta no Git nem em logs.
