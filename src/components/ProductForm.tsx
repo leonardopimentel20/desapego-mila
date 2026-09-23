@@ -137,7 +137,10 @@ export function ProductForm({ action }: ProductFormProps) {
       const formData = new FormData(formElement);
 
       const rawPrice = String(formData.get("price") || "").trim();
-      const cleanPrice = rawPrice.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+      const priceText = rawPrice.replace(/[^\d,.-]/g, "");
+      const cleanPrice = /^\d+(?:\.\d{1,2})?$/.test(priceText)
+        ? priceText
+        : priceText.replace(/\./g, "").replace(",", ".");
       if (cleanPrice) {
         formData.set("price", cleanPrice);
       }
