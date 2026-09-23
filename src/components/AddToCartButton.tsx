@@ -51,6 +51,7 @@ export function AddToCartButton({ product, isSold }: AddToCartButtonProps) {
         </div>
       )}
       <button
+      type="button"
       onClick={() =>
         addToCart({
           id: product.id,

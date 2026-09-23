@@ -7,6 +7,7 @@ export function CartButton() {
 
   return (
     <button
+      type="button"
       onClick={() => setIsCartOpen(true)}
       className="relative bg-white border border-neutral-200 hover:border-pink-400 text-neutral-800 px-4 py-2.5 rounded-full font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
     >

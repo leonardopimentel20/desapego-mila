@@ -34,6 +34,7 @@ export function ProductGallery({ images, title }: ProductGalleryProps) {
             const isSelected = img === selectedImage;
             return (
               <button
+                type="button"
                 key={index}
                 onClick={() => setSelectedImage(img)}
                 aria-label={`Ver foto ${index + 1} de ${title}`}

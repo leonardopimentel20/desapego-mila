@@ -62,7 +62,7 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
     setIsOpen(false);
     startTransition(() => {
       if (isAdmin) {
-        router.push(`/admin?search=${encodeURIComponent(searchQuery)}`);
+        router.push(`/admin?search=${encodeURIComponent(searchQuery)}`, { scroll: false });
       } else {
         const params = new URLSearchParams(searchParams.toString());
         if (searchQuery) {
@@ -70,7 +70,7 @@ export function SearchBox({ initialValue = "", placeholder = "Buscar...", isAdmi
         } else {
           params.delete('search');
         }
-        router.push(`/?${params.toString()}`);
+        router.push(`/?${params.toString()}`, { scroll: false });
       }
     });
   };

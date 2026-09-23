@@ -194,13 +194,13 @@ export default async function Home({ searchParams }: HomeProps) {
         </div>
 
         <nav aria-label="Navegação Secundária" className="max-w-7xl mx-auto flex items-center gap-6 overflow-x-auto pt-4 pb-1 text-xs font-semibold text-neutral-600 scrollbar-none border-t border-neutral-100 mt-3">
-          <Link href="/?category=novidades" className="hover:text-pink-600 transition-colors whitespace-nowrap text-pink-600 font-bold">✨ Recém Chegados</Link>
-          <Link href="/?category=roupas" className="hover:text-pink-600 transition-colors whitespace-nowrap">👗 Roupas</Link>
-          <Link href="/?category=acessorios" className="hover:text-pink-600 transition-colors whitespace-nowrap">👜 Acessórios</Link>
-          <Link href="/?category=calcados" className="hover:text-pink-600 transition-colors whitespace-nowrap">👠 Calçados</Link>
-          <Link href="/?category=utilidades" className="hover:text-pink-600 transition-colors whitespace-nowrap">🏠 Utilidades</Link>
-          <Link href="/?category=brinquedos" className="hover:text-pink-600 transition-colors whitespace-nowrap">🧸 Brinquedos</Link>
-          <Link href="/?category=perfumaria" className="hover:text-pink-600 transition-colors whitespace-nowrap">✨ Perfumaria</Link>
+          <Link scroll={false} href="/?category=novidades" className="hover:text-pink-600 transition-colors whitespace-nowrap text-pink-600 font-bold">✨ Recém Chegados</Link>
+          <Link scroll={false} href="/?category=roupas" className="hover:text-pink-600 transition-colors whitespace-nowrap">👗 Roupas</Link>
+          <Link scroll={false} href="/?category=acessorios" className="hover:text-pink-600 transition-colors whitespace-nowrap">👜 Acessórios</Link>
+          <Link scroll={false} href="/?category=calcados" className="hover:text-pink-600 transition-colors whitespace-nowrap">👠 Calçados</Link>
+          <Link scroll={false} href="/?category=utilidades" className="hover:text-pink-600 transition-colors whitespace-nowrap">🏠 Utilidades</Link>
+          <Link scroll={false} href="/?category=brinquedos" className="hover:text-pink-600 transition-colors whitespace-nowrap">🧸 Brinquedos</Link>
+          <Link scroll={false} href="/?category=perfumaria" className="hover:text-pink-600 transition-colors whitespace-nowrap">✨ Perfumaria</Link>
         </nav>
       </header>
 
@@ -210,6 +210,7 @@ export default async function Home({ searchParams }: HomeProps) {
             <div className="flex gap-5 overflow-x-auto pb-4 scrollbar-none snap-x">
               {shortcutCategories.map((item, index) => (
                 <Link
+                  scroll={false}
                   key={index}
                   href={`/?category=${item.cat}`}
                   className="flex flex-col items-center gap-2.5 flex-shrink-0 group cursor-pointer snap-start"
@@ -241,6 +242,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 {categories.map((cat) => (
                   <li key={cat.id}>
                     <Link
+                      scroll={false}
                       href={`/?category=${cat.id}&size=${size}&gender=${gender}`}
                       className={`block px-3 py-2 rounded-xl transition-all ${category === cat.id ? 'bg-pink-600 text-white font-bold shadow-sm' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'}`}
                     >
@@ -259,6 +261,7 @@ export default async function Home({ searchParams }: HomeProps) {
                   {currentSubcategories.map((sub) => (
                     <li key={sub.id}>
                       <Link
+                        scroll={false}
                         href={`/?category=${category}&subcategory=${sub.id}&size=${size}&gender=${gender}&sort=${sort}`}
                         className={`block px-3 py-1.5 rounded-xl transition-all ${subcategory === sub.id ? 'bg-neutral-900 text-white font-bold' : 'text-neutral-600 hover:bg-neutral-100'}`}
                       >
@@ -276,6 +279,7 @@ export default async function Home({ searchParams }: HomeProps) {
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {genders.map((g) => (
                   <Link
+                    scroll={false}
                     key={g.id}
                     href={`/?category=${category}&subcategory=${subcategory}&size=${size}&gender=${g.id}&sort=${sort}`}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${gender === g.id ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:border-neutral-400'}`}
@@ -292,6 +296,7 @@ export default async function Home({ searchParams }: HomeProps) {
               <div className="flex flex-wrap gap-1.5 pt-1 max-h-48 overflow-y-auto scrollbar-none">
                 {sizes.map((s) => (
                   <Link
+                    scroll={false}
                     key={s}
                     href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${s}&sort=${sort}`}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${size === s ? 'bg-neutral-900 text-white border-neutral-900 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:border-neutral-400'}`}
@@ -312,9 +317,9 @@ export default async function Home({ searchParams }: HomeProps) {
 
               <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-end">
                 <span className="text-neutral-500 font-semibold">Ordenar:</span>
-                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=recentes`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'recentes' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Recentes</Link>
-                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=menor`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'menor' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Menor Preço</Link>
-                <Link href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=maior`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'maior' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Maior Preço</Link>
+                <Link scroll={false} href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=recentes`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'recentes' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Recentes</Link>
+                <Link scroll={false} href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=menor`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'menor' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Menor Preço</Link>
+                <Link scroll={false} href={`/?category=${category}&gender=${gender}&subcategory=${subcategory}&size=${size}&sort=maior`} className={`px-3.5 py-2 rounded-xl border transition-all ${sort === 'maior' ? 'bg-pink-50 text-pink-600 border-pink-200 font-bold' : 'bg-neutral-50 text-neutral-600 border-neutral-200'}`}>Maior Preço</Link>
               </div>
             </div>
 
