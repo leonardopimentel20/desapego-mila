@@ -17,7 +17,7 @@
     "db:migrate:reservations": "node scripts/migrate-reservations.mjs",
     "db:migrate:delivery": "node scripts/migrate-delivery.mjs",
     "db:migrate:sold-quantity": "node scripts/migrate-sold-quantity.mjs",
-    "whatsapp": "tsx src/whatsapp/index.ts"
+    "whatsapp": "npm run db:migrate:delivery && tsx src/whatsapp/index.ts"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",

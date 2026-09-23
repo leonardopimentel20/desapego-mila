@@ -232,6 +232,16 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         });
       } catch (error) {
         console.error("Não foi possível responder à mensagem do WhatsApp:", error);
+        const errorCode = (error as { code?: string } | null)?.code;
+        const responseText = errorCode === "ER_BAD_FIELD_ERROR"
+          ? "Não consegui atualizar os dados de entrega porque o banco ainda está sendo atualizado. Reinicie o serviço do WhatsApp e tente novamente em alguns instantes."
+          : "Tive um problema ao atualizar sua reserva. A Mila já poderá continuar o atendimento manualmente por aqui.";
+
+        try {
+          await socket.sendMessage(message.key.remoteJid, { text: responseText });
+        } catch (responseError) {
+          console.error("Não foi possível enviar o aviso de falha ao WhatsApp:", responseError);
+        }
       }
     }
   });
