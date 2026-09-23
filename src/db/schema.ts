@@ -52,5 +52,6 @@ export const whatsappSettings = mysqlTable('whatsapp_settings', {
   enabled: int('enabled').notNull().default(1),
   disconnectRequested: int('disconnect_requested').notNull().default(0),
   connectedPhone: varchar('connected_phone', { length: 30 }),
+  qrCode: text('qr_code'),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
 });

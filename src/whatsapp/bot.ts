@@ -8,6 +8,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
+import QRCode from "qrcode";
 import { Boom } from "@hapi/boom";
 import mysql from "mysql2/promise";
 import { rm } from "node:fs/promises";
@@ -102,6 +103,19 @@ async function saveConnectedPhone(phone: string | null) {
   }
 }
 
+async function saveQrCode(qrCode: string | null) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      "UPDATE whatsapp_settings SET qr_code = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+      [qrCode],
+    );
+  } finally {
+    await connection.end();
+  }
+}
+
 function getConnectedPhone(socket: WASocket) {
   const id = socket.user?.id;
   if (!id) return null;
@@ -111,6 +125,7 @@ function getConnectedPhone(socket: WASocket) {
 async function completeDisconnectRequest() {
   await rm(whatsappConfig.authFolder, { recursive: true, force: true });
   await saveConnectedPhone(null);
+  await saveQrCode(null);
 }
 
 function formatPhoneForLog(phone: string) {
@@ -314,6 +329,9 @@ export async function startWhatsAppBot(): Promise<WASocket> {
     if (qr) {
       console.log("\nEscaneie este QR Code no WhatsApp:\n");
       qrcode.generate(qr, { small: true });
+      void QRCode.toDataURL(qr, { width: 320, margin: 2 })
+        .then((qrImage) => saveQrCode(qrImage))
+        .catch((error: unknown) => console.error("Não foi possível preparar o QR Code para o painel:", error));
     }
 
     if (connection === "open") {
@@ -321,6 +339,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       reconnectAttempts = 0;
       const connectedPhone = getConnectedPhone(socket);
       await saveConnectedPhone(connectedPhone);
+      await saveQrCode(null);
       console.log(`WhatsApp conectado com sucesso: ${connectedPhone ? formatPhoneForLog(connectedPhone) : "número não identificado"}.`);
       if (whatsappConfig.expectedPhone && connectedPhone !== whatsappConfig.expectedPhone) {
         console.error(

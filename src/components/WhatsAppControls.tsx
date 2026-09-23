@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { requestWhatsAppDisconnectAction, setWhatsAppEnabledAction } from '../app/admin/actions';
 
@@ -8,6 +8,7 @@ interface WhatsAppControlsProps {
   enabled: boolean;
   disconnectRequested: boolean;
   connectedPhone: string | null;
+  qrCode: string | null;
 }
 
 function formatPhone(phone: string | null) {
@@ -16,11 +17,17 @@ function formatPhone(phone: string | null) {
   return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
 }
 
-export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone }: WhatsAppControlsProps) {
+export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone, qrCode }: WhatsAppControlsProps) {
   const [isPending, startTransition] = useTransition();
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!enabled || connectedPhone) return;
+    const refreshTimer = window.setInterval(() => router.refresh(), 4000);
+    return () => window.clearInterval(refreshTimer);
+  }, [connectedPhone, enabled, router]);
 
   const toggle = () => {
     setFeedback(null);
@@ -54,7 +61,7 @@ export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone 
           <h2 className="text-lg font-bold">Atendimento pelo WhatsApp</h2>
           <p className="mt-1 text-xs text-neutral-500">
             {disconnectRequested
-              ? 'Número desconectado. Reative para gerar um novo QR Code nos logs do serviço.'
+              ? 'Número desconectado. Reative para gerar um novo QR Code nesta tela.'
               : enabled
                 ? 'Atendimento automático ativo.'
                 : 'Atendimento pausado. A sessão continua preservada.'}
@@ -75,6 +82,21 @@ export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone 
           Desconectar número
         </button>
       </div>
+      {enabled && !connectedPhone && (
+        <div className="mt-5 flex flex-col items-center gap-3 rounded-2xl border border-pink-100 bg-pink-50 p-4 text-center">
+          {qrCode ? (
+            <>
+              <p className="text-sm font-extrabold text-neutral-800">Escaneie este QR Code pelo WhatsApp</p>
+              <img src={qrCode} alt="QR Code para conectar o WhatsApp" className="h-64 w-64 rounded-xl bg-white p-2 shadow-sm" />
+              <p className="max-w-sm text-xs leading-relaxed text-neutral-600">
+                No celular: Configurações → Dispositivos conectados → Conectar dispositivo.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs font-semibold text-neutral-600">Gerando QR Code para pareamento...</p>
+          )}
+        </div>
+      )}
       {feedback && (
         <p role="status" className="mt-3 rounded-xl bg-neutral-50 px-3 py-2 text-xs font-semibold text-neutral-600">
           {feedback}

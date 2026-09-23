@@ -22,6 +22,12 @@ try {
     if (error?.code !== "ER_DUP_FIELDNAME") throw error;
   });
   await connection.execute(`
+    ALTER TABLE whatsapp_settings
+      ADD COLUMN qr_code TEXT NULL
+  `).catch((error) => {
+    if (error?.code !== "ER_DUP_FIELDNAME") throw error;
+  });
+  await connection.execute(`
     INSERT INTO whatsapp_settings (id, enabled, disconnect_requested)
     VALUES (1, 1, 0)
     ON DUPLICATE KEY UPDATE id = id
