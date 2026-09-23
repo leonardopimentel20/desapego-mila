@@ -19,7 +19,7 @@ export function CartDrawer() {
   const handleWhatsAppCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !customerPhone.trim()) {
-      alert("Por favor, preencha seu Nome e WhatsApp para finalizar a reserva!");
+      setErrorMessage("Por favor, preencha seu Nome e WhatsApp para finalizar a reserva.");
       return;
     }
 
@@ -74,8 +74,8 @@ export function CartDrawer() {
         onClick={() => setIsCartOpen(false)}
       />
 
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col">
+      <div className="absolute inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+        <div className="w-[calc(100vw-1rem)] sm:w-screen max-w-md bg-white shadow-2xl flex flex-col">
           
           {/* Cabeçalho da Sacola */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200">
@@ -154,6 +154,7 @@ export function CartDrawer() {
                       onClick={() => removeFromCart(item.id)}
                       className="text-neutral-400 hover:text-red-600 p-2 transition-colors cursor-pointer"
                       title="Remover item"
+                      aria-label={`Remover uma unidade de ${item.title}`}
                     >
                       🗑️
                     </button>

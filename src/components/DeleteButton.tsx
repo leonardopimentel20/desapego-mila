@@ -10,12 +10,16 @@ interface DeleteButtonProps {
 export function DeleteButton({ productId, deleteAction }: DeleteButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setErrorMessage('');
+          setIsOpen(true);
+        }}
         className="text-xs bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 px-4 py-2 rounded-lg transition-all cursor-pointer font-semibold"
       >
         Excluir
@@ -31,6 +35,11 @@ export function DeleteButton({ productId, deleteAction }: DeleteButtonProps) {
                 Tem certeza que deseja excluir este item da vitrine? Esta ação não pode ser desfeita.
               </p>
             </div>
+            {errorMessage && (
+              <p role="alert" className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-3 py-2 text-xs font-semibold">
+                {errorMessage}
+              </p>
+            )}
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button
@@ -48,9 +57,9 @@ export function DeleteButton({ productId, deleteAction }: DeleteButtonProps) {
                   setLoading(true);
                   try {
                     await deleteAction(productId);
-                  } catch {
+                  } catch (error) {
                     setLoading(false);
-                    setIsOpen(false);
+                    setErrorMessage(error instanceof Error ? error.message : 'Não foi possível excluir o produto.');
                   }
                 }}
                 className="text-xs bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-sm"

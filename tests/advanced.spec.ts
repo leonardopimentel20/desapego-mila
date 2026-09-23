@@ -24,6 +24,21 @@ async function openFirstProduct(page: Page) {
 }
 
 test.describe('Testes avançados de jornada do cliente', () => {
+  test('permite abrir a sacola usando interação por toque', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-touch', 'Teste exclusivo do projeto móvel com toque.');
+    await page.setViewportSize({ width: 393, height: 852 });
+    await page.addInitScript((storageKey) => {
+      window.localStorage.removeItem(storageKey);
+    }, CART_STORAGE_KEY);
+
+    await openFirstProduct(page);
+    await page.getByRole('button', { name: /Adicionar à Sacola/i }).tap();
+
+    const drawer = page.getByRole('dialog', { name: /Sua Sacola de Garimpos/i });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Fechar sacola' })).toBeVisible();
+  });
+
   test('mantém a busca contextual e navega por sugestões com teclado', async ({ page }) => {
     await page.route('**/api/suggestions?q=*', async (route) => {
       await route.fulfill({

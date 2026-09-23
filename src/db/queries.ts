@@ -37,6 +37,7 @@ export async function getAvailableProducts(
       stock: products.stock,
       size: products.size,
       status: products.status,
+      reservedQuantity: products.reservedQuantity,
       updatedAt: products.updatedAt,
       categoryId: products.categoryId,
       subcategory: products.subcategory,

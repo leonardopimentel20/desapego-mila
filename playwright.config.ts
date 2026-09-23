@@ -20,6 +20,10 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-touch',
+      use: { ...devices['Pixel 5'] },
+    },
   ],
 
   // Opcional: Se quiser que o Playwright inicie o "npm run dev" sozinho antes dos testes

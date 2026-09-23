@@ -131,20 +131,28 @@ export default async function Home({ searchParams }: HomeProps) {
       {/* Drawer da Sacola */}
       <CartDrawer />
 
-      <header className="border-b border-neutral-200/80 bg-white/90 backdrop-blur-xl sticky top-0 z-40 px-4 md:px-12 py-4 shadow-xs">
+      <header className="border-b border-neutral-200/80 bg-white/90 px-4 md:px-12 py-2 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center justify-between w-full md:w-auto">
             <div>
-              <Link href="/">
-                <h1 className="text-2xl font-black tracking-tight text-pink-600 font-sans cursor-pointer">
-                  Desapego da Mila
-                </h1>
+              <Link href="/" aria-label="Desapego da Mila - página inicial" className="inline-flex items-center">
+                <img
+                  src="/logo-desapego-mila.png"
+                  alt="Desapego da Mila"
+                  className="h-36 w-28 object-contain object-left sm:h-44 sm:w-36"
+                />
+                <h1 className="sr-only">Desapego da Mila</h1>
               </Link>
-              <p className="text-xs text-neutral-500 font-medium">
-                Brechó on-line com muito estilo.
-              </p>
             </div>
             <div className="flex items-center gap-2 md:hidden">
+              <a
+                href="https://wa.me/5547996473275?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3 py-2 rounded-full font-bold transition-all"
+              >
+                Vender 💰
+              </a>
               <CartButton />
             </div>
           </div>
@@ -302,7 +310,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 {products.map((product) => {
                   const stockNum = Number(product.stock) || 0;
                   const isSold = stockNum === 0 || (product.status === 'SOLD' && stockNum <= 1);
-                  const isReserved = product.status === 'RESERVED';
+                  const isReserved = product.reservedQuantity > 0;
 
                   return (
                     <Link

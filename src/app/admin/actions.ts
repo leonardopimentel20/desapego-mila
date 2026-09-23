@@ -166,9 +166,16 @@ export async function setProductStatusAction(
   const validProductId = parseId(productId);
 
   await db.transaction(async (tx) => {
-    const [product] = await tx.select({ status: products.status, stock: products.stock }).from(products)
+    const [product] = await tx.select({
+      status: products.status,
+      stock: products.stock,
+      reservedQuantity: products.reservedQuantity,
+    }).from(products)
       .where(eq(products.id, validProductId)).for("update");
     if (!product) throw new Error("Produto não encontrado.");
+    if (targetStatus === "SOLD" && product.reservedQuantity > 0) {
+      throw new Error("Finalize ou cancele as reservas antes de marcar este produto como vendido.");
+    }
 
     await tx.update(products)
       .set({
@@ -176,9 +183,6 @@ export async function setProductStatusAction(
         // A mudança manual de status não representa uma baixa de estoque.
         // O estoque só é decrementado por registerSaleAction.
         stock: targetStatus === 'AVAILABLE' ? Math.max(product.stock, 1) : product.stock,
-        customerName: null,
-        customerPhone: null,
-        reservedQuantity: 0,
         updatedAt: new Date(),
       })
       .where(eq(products.id, validProductId));
@@ -241,7 +245,7 @@ export async function updateProductAction(productId: string, formData: FormData)
   redirect("/admin?success=atualizado");
 }
 
-// Registrar Venda de forma gradativa para múltiplos estoques
+// Registra uma venda manual usando somente uma unidade disponível.
 export async function registerSaleAction(productId: string): Promise<void> {
   await requireAdminSession();
   const validProductId = parseId(productId);
@@ -252,19 +256,16 @@ export async function registerSaleAction(productId: string): Promise<void> {
     if (!product) throw new Error("Produto não encontrado.");
     if (product.stock <= 0) throw new Error("Este produto já está sem estoque.");
 
-    const quantityToSell = product.reservedQuantity > 0 ? product.reservedQuantity : 1;
-    if (product.stock < quantityToSell) {
-      throw new Error("O estoque atual não cobre a quantidade reservada.");
-    }
-
-    const newStock = product.stock - quantityToSell;
+    const newStock = product.stock - 1;
     await tx.update(products)
       .set({
         stock: newStock,
+        soldQuantity: product.soldQuantity + 1,
         status: newStock === 0 ? 'SOLD' : 'AVAILABLE',
-        customerName: null,
-        customerPhone: null,
-        reservedQuantity: 0,
+        ...(product.reservedQuantity === 0 ? {
+          customerName: null,
+          customerPhone: null,
+        } : {}),
         updatedAt: new Date(),
       })
       .where(eq(products.id, validProductId));
@@ -369,6 +370,7 @@ export async function reserveProductsAction(
       id: products.id,
       status: products.status,
       stock: products.stock,
+      reservedQuantity: products.reservedQuantity,
     }).from(products).where(inArray(products.id, validIds)).for("update");
 
     if (
@@ -395,12 +397,18 @@ export async function reserveProductsAction(
     })));
 
     for (const item of validItems) {
+      const product = selectedProducts.find((entry) => entry.id === item.productId);
+      if (!product) throw new Error("Um produto da reserva não foi encontrado.");
+
       await tx.update(products)
         .set({
-          status: 'RESERVED',
-          reservedQuantity: item.quantity,
-          customerName: name,
-          customerPhone: phone,
+          stock: product.stock - item.quantity,
+          status: 'AVAILABLE',
+          reservedQuantity: product.reservedQuantity + item.quantity,
+          ...(product.reservedQuantity === 0 ? {
+            customerName: name,
+            customerPhone: phone,
+          } : {}),
           updatedAt: new Date(),
         })
         .where(eq(products.id, item.productId));
@@ -419,12 +427,42 @@ export async function confirmReservationAction(reservationId: string): Promise<v
       .from(reservations).where(eq(reservations.id, validReservationId)).for("update");
     if (!reservation) throw new Error("Reserva não encontrada.");
     if (reservation.status !== "PENDING") throw new Error("Somente reservas pendentes podem ser confirmadas.");
-    const items = await tx.select({ productId: reservationItems.productId })
+    const items = await tx.select({
+      productId: reservationItems.productId,
+      quantity: reservationItems.quantity,
+    })
       .from(reservationItems).where(eq(reservationItems.reservationId, validReservationId));
     if (items.length === 0) throw new Error("A reserva não possui itens.");
+
+    for (const item of items) {
+      const [product] = await tx.select({
+        stock: products.stock,
+        status: products.status,
+        reservedQuantity: products.reservedQuantity,
+        soldQuantity: products.soldQuantity,
+      }).from(products).where(eq(products.id, item.productId)).for("update");
+
+      if (!product) throw new Error("Um produto da reserva não foi encontrado.");
+      if (product.status === "SOLD" || product.reservedQuantity < item.quantity) {
+        throw new Error("Um produto da reserva não está mais disponível para concluir a venda.");
+      }
+
+      await tx.update(products).set({
+        soldQuantity: product.soldQuantity + item.quantity,
+        status: product.stock === 0 && product.reservedQuantity === item.quantity ? "SOLD" : "AVAILABLE",
+        reservedQuantity: product.reservedQuantity - item.quantity,
+        ...(product.reservedQuantity === item.quantity ? {
+          customerName: null,
+          customerPhone: null,
+        } : {}),
+        updatedAt: new Date(),
+      }).where(eq(products.id, item.productId));
+    }
+
     await tx.update(reservations).set({ status: "CONFIRMED", updatedAt: new Date() })
       .where(eq(reservations.id, validReservationId));
   });
+  revalidatePath("/");
   revalidatePath("/admin");
 }
 
@@ -436,17 +474,30 @@ export async function cancelReservationAction(reservationId: string): Promise<vo
       .from(reservations).where(eq(reservations.id, validReservationId)).for("update");
     if (!reservation) throw new Error("Reserva não encontrada.");
     if (reservation.status === "CANCELLED") return;
-    const items = await tx.select({ productId: reservationItems.productId })
+    if (reservation.status !== "PENDING") {
+      throw new Error("Uma reserva confirmada já foi registrada como venda e não pode ser cancelada por aqui.");
+    }
+    const items = await tx.select({
+      productId: reservationItems.productId,
+      quantity: reservationItems.quantity,
+    })
       .from(reservationItems).where(eq(reservationItems.reservationId, validReservationId));
     for (const item of items) {
-      const [product] = await tx.select({ status: products.status }).from(products)
+      const [product] = await tx.select({
+        stock: products.stock,
+        status: products.status,
+        reservedQuantity: products.reservedQuantity,
+      }).from(products)
         .where(eq(products.id, item.productId)).for("update");
-      if (product?.status === "RESERVED") {
+      if (product) {
         await tx.update(products).set({
+          stock: product.stock + item.quantity,
           status: "AVAILABLE",
-          reservedQuantity: 0,
-          customerName: null,
-          customerPhone: null,
+          reservedQuantity: Math.max(0, product.reservedQuantity - item.quantity),
+          ...(product.reservedQuantity <= item.quantity ? {
+            customerName: null,
+            customerPhone: null,
+          } : {}),
           updatedAt: new Date(),
         }).where(eq(products.id, item.productId));
       }
@@ -466,29 +517,55 @@ export async function removeReservationItemAction(reservationItemId: string): Pr
       id: reservationItems.id,
       reservationId: reservationItems.reservationId,
       productId: reservationItems.productId,
+      quantity: reservationItems.quantity,
       status: reservations.status,
     }).from(reservationItems)
       .innerJoin(reservations, eq(reservations.id, reservationItems.reservationId))
       .where(eq(reservationItems.id, validItemId)).for("update");
     if (!item) throw new Error("Item da reserva não encontrado.");
-    if (item.status !== "PENDING" && item.status !== "CONFIRMED") {
-      throw new Error("Somente itens de reservas ativas podem ser removidos.");
+    if (item.status !== "PENDING") {
+      throw new Error("Os itens só podem ser ajustados enquanto a reserva estiver pendente.");
     }
-    const [product] = await tx.select({ status: products.status }).from(products)
+    const [product] = await tx.select({
+      stock: products.stock,
+      status: products.status,
+      reservedQuantity: products.reservedQuantity,
+    }).from(products)
       .where(eq(products.id, item.productId)).for("update");
-    if (product?.status === "RESERVED") {
-      await tx.update(products).set({
-        status: "AVAILABLE",
-        reservedQuantity: 0,
-        customerName: null,
-        customerPhone: null,
-        updatedAt: new Date(),
-      }).where(eq(products.id, item.productId));
+    if (product) {
+      if (item.quantity > 1) {
+        await tx.update(products).set({
+          stock: product.stock + 1,
+          status: "AVAILABLE",
+          reservedQuantity: Math.max(0, product.reservedQuantity - 1),
+          ...(product.reservedQuantity <= 1 ? {
+            customerName: null,
+            customerPhone: null,
+          } : {}),
+          updatedAt: new Date(),
+        }).where(eq(products.id, item.productId));
+      } else {
+        await tx.update(products).set({
+          stock: product.stock + 1,
+          status: "AVAILABLE",
+          reservedQuantity: Math.max(0, product.reservedQuantity - 1),
+          ...(product.reservedQuantity <= 1 ? {
+            customerName: null,
+            customerPhone: null,
+          } : {}),
+          updatedAt: new Date(),
+        }).where(eq(products.id, item.productId));
+      }
     }
     const remaining = await tx.select({ id: reservationItems.id }).from(reservationItems)
       .where(eq(reservationItems.reservationId, item.reservationId));
-    await tx.delete(reservationItems).where(eq(reservationItems.id, validItemId));
-    if (remaining.length <= 1) {
+    if (item.quantity > 1) {
+      await tx.update(reservationItems).set({ quantity: item.quantity - 1 })
+        .where(eq(reservationItems.id, validItemId));
+    } else {
+      await tx.delete(reservationItems).where(eq(reservationItems.id, validItemId));
+    }
+    if (remaining.length <= 1 && item.quantity <= 1) {
       await tx.update(reservations).set({ status: "CANCELLED", updatedAt: new Date() })
         .where(eq(reservations.id, item.reservationId));
     }

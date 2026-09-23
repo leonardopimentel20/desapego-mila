@@ -27,7 +27,7 @@ test.describe('Fluxo do Usuário Final - Desapego da Mila', () => {
       await firstProduct.click();
       
       // 6. Confirma que o botão de WhatsApp está presente na página do produto
-      const whatsappButton = page.locator('a[href*="wa.me"]');
+      const whatsappButton = page.locator('a[href*="wa.me"]:visible');
       await expect(whatsappButton).toBeVisible();
     }
   });
