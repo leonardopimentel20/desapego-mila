@@ -26,6 +26,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     disconnectRequested: whatsappSettings.disconnectRequested,
     connectedPhone: whatsappSettings.connectedPhone,
     qrCode: whatsappSettings.qrCode,
+    connectionError: whatsappSettings.connectionError,
   }).from(whatsappSettings).where(eq(whatsappSettings.id, 1));
 
   // Métricas gerais do catálogo
@@ -232,6 +233,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           disconnectRequested={whatsappSetting?.disconnectRequested === 1}
           connectedPhone={whatsappSetting?.connectedPhone ?? null}
           qrCode={whatsappSetting?.qrCode ?? null}
+          connectionError={whatsappSetting?.connectionError ?? null}
         />
 
         {/* Formulário Dinâmico de Cadastro usando a action centralizada */}

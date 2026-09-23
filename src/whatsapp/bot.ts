@@ -20,6 +20,7 @@ const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 let reconnecting = false;
 let reconnectAttempts = 0;
 let whatsappSocketActive = false;
+let qrGeneration = 0;
 type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-confirmation" | "payment" | "payment-proof";
 const conversationStates = new Map<string, {
   state: BotState;
@@ -116,6 +117,19 @@ async function saveQrCode(qrCode: string | null) {
   }
 }
 
+async function saveConnectionError(message: string | null) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada no serviço do WhatsApp.");
+  const connection = await mysql.createConnection(process.env.DATABASE_URL);
+  try {
+    await connection.execute(
+      "UPDATE whatsapp_settings SET connection_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
+      [message],
+    );
+  } finally {
+    await connection.end();
+  }
+}
+
 function getConnectedPhone(socket: WASocket) {
   const id = socket.user?.id;
   if (!id) return null;
@@ -126,6 +140,7 @@ async function completeDisconnectRequest() {
   await rm(whatsappConfig.authFolder, { recursive: true, force: true });
   await saveConnectedPhone(null);
   await saveQrCode(null);
+  await saveConnectionError(null);
 }
 
 function formatPhoneForLog(phone: string) {
@@ -327,10 +342,12 @@ export async function startWhatsAppBot(): Promise<WASocket> {
   socket.ev.on("creds.update", saveCreds);
   socket.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
+      const currentQrGeneration = ++qrGeneration;
+      await saveConnectionError(null);
       console.log("\nEscaneie este QR Code no WhatsApp:\n");
       qrcode.generate(qr, { small: true });
       void QRCode.toDataURL(qr, { width: 320, margin: 2 })
-        .then((qrImage) => saveQrCode(qrImage))
+        .then((qrImage) => currentQrGeneration === qrGeneration ? saveQrCode(qrImage) : undefined)
         .catch((error: unknown) => console.error("Não foi possível preparar o QR Code para o painel:", error));
     }
 
@@ -340,6 +357,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
       const connectedPhone = getConnectedPhone(socket);
       await saveConnectedPhone(connectedPhone);
       await saveQrCode(null);
+      await saveConnectionError(null);
       console.log(`WhatsApp conectado com sucesso: ${connectedPhone ? formatPhoneForLog(connectedPhone) : "número não identificado"}.`);
       if (whatsappConfig.expectedPhone && connectedPhone !== whatsappConfig.expectedPhone) {
         console.error(
@@ -350,9 +368,18 @@ export async function startWhatsAppBot(): Promise<WASocket> {
 
     if (connection === "close") {
       whatsappSocketActive = false;
+      qrGeneration += 1;
+      await saveQrCode(null);
       const statusCode = getDisconnectStatus(lastDisconnect?.error);
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       console.error(`Conexão do WhatsApp encerrada. Código: ${statusCode ?? "desconhecido"}.`);
+      if (!loggedOut) {
+        await saveConnectionError(
+          statusCode === 408
+            ? "O QR Code expirou. Aguarde a geração de um novo código."
+            : `A conexão foi recusada pelo WhatsApp (código ${statusCode ?? "desconhecido"}). Gere um novo QR Code.`,
+        );
+      }
 
       if (statusCode === 405) {
         console.error(

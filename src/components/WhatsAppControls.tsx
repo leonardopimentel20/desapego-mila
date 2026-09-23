@@ -9,6 +9,7 @@ interface WhatsAppControlsProps {
   disconnectRequested: boolean;
   connectedPhone: string | null;
   qrCode: string | null;
+  connectionError: string | null;
 }
 
 function formatPhone(phone: string | null) {
@@ -17,7 +18,7 @@ function formatPhone(phone: string | null) {
   return digits.startsWith('55') ? `+${digits}` : `+55${digits}`;
 }
 
-export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone, qrCode }: WhatsAppControlsProps) {
+export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone, qrCode, connectionError }: WhatsAppControlsProps) {
   const [isPending, startTransition] = useTransition();
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export function WhatsAppControls({ enabled, disconnectRequested, connectedPhone,
               </p>
             </>
           ) : (
-            <p className="text-xs font-semibold text-neutral-600">Gerando QR Code para pareamento...</p>
+            <p className="text-xs font-semibold text-neutral-600">{connectionError || 'Gerando QR Code para pareamento...'}</p>
           )}
         </div>
       )}
