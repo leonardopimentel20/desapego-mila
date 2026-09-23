@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, text, decimal, int, timestamp } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, text, decimal, int, tinyint, timestamp, date, bigint } from 'drizzle-orm/mysql-core';
 
 export const products = mysqlTable('products', {
   id: varchar('id', { length: 36 }).primaryKey(),
@@ -44,6 +44,26 @@ export const reservations = mysqlTable('reservations', {
   deliveryReference: varchar('delivery_reference', { length: 255 }),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const deliverySettings = mysqlTable('delivery_settings', {
+  id: int('id').primaryKey(),
+  enabled: tinyint('enabled').notNull().default(0),
+  originStreet: varchar('origin_street', { length: 255 }),
+  originNumber: varchar('origin_number', { length: 30 }),
+  originNeighborhood: varchar('origin_neighborhood', { length: 120 }),
+  originLatitude: decimal('origin_latitude', { precision: 10, scale: 7 }),
+  originLongitude: decimal('origin_longitude', { precision: 10, scale: 7 }),
+  minimumFeeCents: int('minimum_fee_cents'),
+  perKmCents: int('per_km_cents'),
+  roundTrip: tinyint('round_trip').notNull().default(0),
+  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow(),
+});
+
+export const deliveryApiUsage = mysqlTable('delivery_api_usage', {
+  usageDay: date('usage_day', { mode: 'string' }).primaryKey(),
+  credits: int('credits').notNull().default(0),
+  nextRequestAt: bigint('next_request_at', { mode: 'number' }).notNull().default(0),
 });
 
 export const reservationItems = mysqlTable('reservation_items', {

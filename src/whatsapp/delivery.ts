@@ -1,3 +1,5 @@
+import { FIXED_DELIVERY_FEE, type ShippingQuote } from "../shipping/pricing.js";
+
 export const deliveryFields = ["neighborhood", "recipient", "street", "number", "phone", "complement", "reference"] as const;
 export type DeliveryField = typeof deliveryFields[number];
 export type DeliveryDetails = Record<DeliveryField, string>;
@@ -44,7 +46,8 @@ export function isCompleteDelivery(draft: DeliveryDraft | undefined): draft is D
   });
 }
 
-export function deliverySummary(details: DeliveryDetails) {
+export function deliverySummary(details: DeliveryDetails, quote: ShippingQuote = { fee: FIXED_DELIVERY_FEE }) {
+  const fee = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(quote.fee).replace(/\u00a0/g, " ");
   return [
     `Destinatário: ${details.recipient}`,
     `Telefone: ${details.phone}`,
@@ -52,7 +55,14 @@ export function deliverySummary(details: DeliveryDetails) {
     `Bairro e cidade: ${details.neighborhood}`,
     `Complemento: ${details.complement || "Não informado"}`,
     `Referência: ${details.reference || "Não informada"}`,
-    "Taxa fixa de entrega: R$ 30,00",
+    ...(quote.distanceMeters === undefined ? [`Taxa fixa de entrega: ${fee}`] : [
+      `Endereço localizado no mapa: ${quote.destination}`,
+      `Distância do trajeto (${quote.roundTrip ? "ida e volta" : "ida"}): ${(quote.distanceMeters / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`,
+      `Frete: ${fee}`,
+      "Confira também o endereço localizado no mapa antes de confirmar.",
+      "Powered by Geoapify: https://www.geoapify.com/",
+      "© OpenStreetMap contributors: https://www.openstreetmap.org/copyright",
+    ]),
     "", "Está correto?", "1️⃣ Sim", "2️⃣ Corrigir dados",
   ].join("\n");
 }

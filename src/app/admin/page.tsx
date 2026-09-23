@@ -174,6 +174,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         {/* Barra de Métricas Minimalista */}
         <nav aria-label="Atalhos do painel" className="sticky top-3 z-10 flex items-center gap-2 overflow-x-auto rounded-2xl border border-neutral-200/80 bg-white/95 p-2 shadow-sm backdrop-blur">
+          <Link href="/admin/frete" className="whitespace-nowrap rounded-xl px-3 py-2 text-[11px] font-bold text-neutral-600 hover:bg-neutral-100">Frete</Link>
           <Link href="/admin#resumo" className="whitespace-nowrap rounded-xl bg-pink-600 px-3 py-2 text-[11px] font-extrabold text-white">Resumo</Link>
           <Link href="/admin?status=RESERVED#reservas" className="whitespace-nowrap rounded-xl px-3 py-2 text-[11px] font-bold text-neutral-600 hover:bg-neutral-100">Reservas {pendingReservationCount > 0 && `(${pendingReservationCount})`}</Link>
           <Link href="/admin#estoque" className="whitespace-nowrap rounded-xl px-3 py-2 text-[11px] font-bold text-neutral-600 hover:bg-neutral-100">Estoque</Link>

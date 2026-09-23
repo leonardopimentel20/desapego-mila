@@ -16,6 +16,9 @@ import { randomUUID } from "node:crypto";
 import { whatsappConfig } from "./config.js";
 import { getAutomaticReply, type ConversationState } from "./menu.js";
 import { deliveryFields, deliveryPrompts, deliverySummary, isCompleteDelivery, validateDeliveryField, type DeliveryDraft, type DeliveryDetails, type DeliveryField } from "./delivery.js";
+import { quoteShipping } from "../shipping/geoapify.js";
+import { FIXED_DELIVERY_FEE, ShippingError, type ShippingQuote, type ShippingSettings } from "../shipping/pricing.js";
+import { getShippingSettings, reserveGeoapifyCredits } from "../shipping/store.js";
 
 const logger = pino({ level: process.env.WHATSAPP_LOG_LEVEL || "info" });
 
@@ -23,17 +26,48 @@ let reconnecting = false;
 let reconnectAttempts = 0;
 let whatsappSocketActive = false;
 let qrGeneration = 0;
-type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-details" | "delivery-confirmation" | "payment" | "payment-proof";
-const conversationStates = new Map<string, {
+type BotState = ConversationState | "delivery-choice" | "delivery-neighborhood" | "delivery-details" | "delivery-quote" | "delivery-confirmation" | "payment" | "payment-proof";
+type BotSession = {
   state: BotState;
   expiresAt: number;
   reservationId?: string;
   deliveryDraft?: DeliveryDraft;
   deliveryField?: DeliveryField;
-}>();
+  shippingSettings?: ShippingSettings;
+  shippingQuote?: ShippingQuote;
+  lastQuoteAttemptAt?: number;
+};
+const conversationStates = new Map<string, BotSession>();
 const conversationStateTtlMs = 30 * 60 * 1000;
-const deliveryFee = 30;
 let whatsappControlTimer: ReturnType<typeof setInterval> | undefined;
+
+const shippingRetryReply = "Responda *1* para tentar calcular novamente, *2* para corrigir o endereço, *3* para voltar à escolha de retirada ou *4* para falar com a Mila.";
+
+async function prepareShippingQuote(socket: WASocket, customerJid: string, session: BotSession) {
+  const details = session.deliveryDraft;
+  if (!isCompleteDelivery(details)) throw new Error("Dados de entrega incompletos.");
+  if (session.shippingSettings?.enabled && session.lastQuoteAttemptAt && Date.now() - session.lastQuoteAttemptAt < 20000) {
+    await socket.sendMessage(customerJid, { text: `Aguarde alguns segundos antes de tentar novamente.\n\n${shippingRetryReply}` });
+    return;
+  }
+  const pending: BotSession = { ...session, state: "delivery-quote", shippingQuote: undefined, lastQuoteAttemptAt: Date.now(), expiresAt: Date.now() + conversationStateTtlMs };
+  conversationStates.set(customerJid, pending);
+  let quote: ShippingQuote;
+  try {
+    const settings = session.shippingSettings || await getShippingSettings();
+    pending.shippingSettings = settings;
+    quote = await quoteShipping(settings, details, { apiKey: process.env.GEOAPIFY_API_KEY || "", reserveCredits: reserveGeoapifyCredits });
+  } catch (error) {
+    if (conversationStates.get(customerJid) !== pending) return;
+    const reason = error instanceof ShippingError && (error.code === "address" || error.code === "quota" || error.code === "route")
+      ? error.message : "Não consegui consultar o frete agora. Nenhum valor foi confirmado.";
+    await socket.sendMessage(customerJid, { text: `${reason}\n\n${shippingRetryReply}` });
+    return;
+  }
+  if (conversationStates.get(customerJid) !== pending) return;
+  conversationStates.set(customerJid, { ...pending, state: "delivery-confirmation", shippingQuote: quote, expiresAt: Date.now() + conversationStateTtlMs });
+  await socket.sendMessage(customerJid, { text: deliverySummary(details, quote) });
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -563,13 +597,18 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           }
 
           if (/^(2|motoboy|entrega|entregar|delivery)$/.test(normalizeForBot(text))) {
+            const shippingSettings = await getShippingSettings();
             conversationStates.set(message.key.remoteJid, {
               ...currentState,
               state: "delivery-neighborhood",
+              shippingSettings,
+              shippingQuote: undefined,
               expiresAt: Date.now() + conversationStateTtlMs,
             });
             await socket.sendMessage(message.key.remoteJid, {
-              text: "Combinado! A entrega por motoboy tem taxa fixa de R$ 30,00 para a cidade inteira. Qual é o seu bairro e cidade?",
+              text: shippingSettings.enabled
+                ? "Combinado! O frete em Joinville será calculado pela distância após você informar o endereço completo. Você verá o valor antes de confirmar. Qual é o seu bairro e cidade?"
+                : `Combinado! A entrega por motoboy tem taxa fixa de ${formatCurrency(FIXED_DELIVERY_FEE)} para a cidade inteira. Qual é o seu bairro e cidade?`,
             });
             continue;
           }
@@ -588,25 +627,49 @@ export async function startWhatsAppBot(): Promise<WASocket> {
           }
           const deliveryDraft = { ...currentState.deliveryDraft, [field]: result.value };
           const nextField = deliveryFields[deliveryFields.indexOf(field) + 1];
-          conversationStates.set(message.key.remoteJid, {
+          const nextSession: BotSession = {
             ...currentState,
             deliveryDraft,
             deliveryField: nextField,
-            state: nextField ? "delivery-details" : "delivery-confirmation",
+            state: nextField ? "delivery-details" : "delivery-quote",
             expiresAt: Date.now() + conversationStateTtlMs,
-          });
-          await socket.sendMessage(message.key.remoteJid, {
-            text: nextField ? deliveryPrompts[nextField] : isCompleteDelivery(deliveryDraft)
-              ? deliverySummary(deliveryDraft) : "Dados incompletos. Envie novamente a mensagem da reserva para recomeçar.",
-          });
+          };
+          conversationStates.set(message.key.remoteJid, nextSession);
+          if (nextField) await socket.sendMessage(message.key.remoteJid, { text: deliveryPrompts[nextField] });
+          else await prepareShippingQuote(socket, message.key.remoteJid, nextSession);
           continue;
+        }
+
+        if (state === "delivery-quote" && currentState?.reservationId) {
+          const option = normalizeForBot(text);
+          if (option === "1") {
+            await prepareShippingQuote(socket, message.key.remoteJid, currentState);
+            continue;
+          }
+          if (option === "2" || option === "3") {
+            conversationStates.set(message.key.remoteJid, {
+              ...currentState, state: option === "2" ? "delivery-neighborhood" : "delivery-choice",
+              deliveryDraft: undefined, deliveryField: undefined, shippingQuote: undefined,
+              expiresAt: Date.now() + conversationStateTtlMs,
+            });
+            await socket.sendMessage(message.key.remoteJid, { text: option === "2" ? "Vamos corrigir os dados. Qual é o bairro e a cidade?" : getDeliveryChoiceReply() });
+            continue;
+          }
+          if (option !== "4") {
+            await socket.sendMessage(message.key.remoteJid, { text: shippingRetryReply });
+            continue;
+          }
+          // Cancela uma consulta ainda em andamento antes de solicitar atendimento.
+          conversationStates.set(message.key.remoteJid, { state: "menu", expiresAt: Date.now() + conversationStateTtlMs });
         }
 
         if (state === "delivery-confirmation" && currentState?.reservationId) {
           if (/^(1|sim|correto|confirmo)$/.test(normalizeForBot(text))) {
             const details = currentState.deliveryDraft;
             if (!isCompleteDelivery(details)) throw new Error("Dados de entrega incompletos.");
-            await updateReservationDelivery(currentState.reservationId, "motoboy", details.neighborhood, deliveryFee, details);
+            const quote = currentState.shippingQuote;
+            if (!quote) throw new Error("Cotação de entrega ausente.");
+            await updateReservationDelivery(currentState.reservationId, "motoboy", details.neighborhood, quote.fee, details);
             const paymentReply = await getPaymentReply(currentState.reservationId);
             conversationStates.set(message.key.remoteJid, {
               ...currentState,
@@ -624,6 +687,7 @@ export async function startWhatsAppBot(): Promise<WASocket> {
               state: "delivery-neighborhood",
               deliveryDraft: undefined,
               deliveryField: undefined,
+              shippingQuote: undefined,
               expiresAt: Date.now() + conversationStateTtlMs,
             });
             await socket.sendMessage(message.key.remoteJid, { text: "Claro! Envie novamente seu bairro e cidade." });
@@ -668,8 +732,11 @@ export async function startWhatsAppBot(): Promise<WASocket> {
         }
 
         if (normalizeForBot(text) === "4") {
-          await createHandoff(message.key.remoteJid, text);
-          const notified = await notifyOwner(socket, message.key.remoteJid, text);
+          const handoffMessage = state === "delivery-quote" && currentState?.reservationId
+            ? `Conferir frete da reserva ${currentState.reservationId}. Endereço informado: ${currentState.deliveryDraft?.street || ""}, ${currentState.deliveryDraft?.number || ""}, ${currentState.deliveryDraft?.neighborhood || ""}.`
+            : text;
+          await createHandoff(message.key.remoteJid, handoffMessage);
+          const notified = await notifyOwner(socket, message.key.remoteJid, handoffMessage);
           conversationStates.set(message.key.remoteJid, {
             state: "menu",
             expiresAt: Date.now() + conversationStateTtlMs,
