@@ -157,7 +157,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 </Link>
               )}
               <a
-                href="https://wa.me/5547996473275?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
+                href="https://wa.me/5547988410988?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[11px] bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-3 py-2 rounded-full font-bold transition-all"
@@ -182,7 +182,7 @@ export default async function Home({ searchParams }: HomeProps) {
               </Link>
             )}
             <a
-              href="https://wa.me/5547996473275?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
+              href="https://wa.me/5547988410988?text=Olá%20Mila!%20Gostaria%20de%20vender%20minhas%20peças%20para%20você."
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-4 py-2.5 rounded-full font-bold transition-all"
