@@ -35,7 +35,7 @@ export function CartDrawer() {
       return;
     }
 
-    const phoneNumber = "5547996473275"; // Número do WhatsApp da Mila
+    const phoneNumber = "5547988410988"; // Número do WhatsApp da Mila
     
     let message = `Olá Mila! Meu nome é *${customerName}* (WhatsApp: ${customerPhone}). Gostaria de reservar os seguintes garimpos:\n\n`;
     
